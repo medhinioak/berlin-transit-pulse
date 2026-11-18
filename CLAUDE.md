@@ -14,13 +14,12 @@ Keep this list true to the Makefile (`make help` lists every target).
 Targets marked (stub) print the issue that implements them and exit non-zero.
 
 - Install: make install (uv sync --all-packages)
-- Start the stack locally: make up (Kafka, Postgres, all services; replays fixtures when
-  BTP_FEED_MODE=fixtures) (stub, #3)
-- Stop / follow logs: make down / make logs (stub, #3)
+- Start the stack locally: make up (Kafka, Postgres, all services; waits until healthy;
+  replays fixtures when BTP_FEED_MODE=fixtures). Stop / follow logs: make down / make logs
+- Inspect the stack: make ps, make kafka-topics, make psql (details: deploy/compose/README.md)
 - Tests: make test (unit, with coverage; one test:
   uv run pytest services/ingest/tests/test_smoke.py::test_package_imports)
-- Integration tests: make test-integration (needs make up; passes with no tests collected
-  until #3 adds them)
+- Integration tests: make test-integration (needs make up)
 - Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy strict, per package)
 - Pre-commit hooks: uv run pre-commit run --all-files
 - Record new feed fixtures: make fixtures (polite to the feed; see Rules) (stub, #4)
