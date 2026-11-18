@@ -28,8 +28,8 @@ through the README and blog.
 - "Right now vs normal" view, line pages with history, network overview, degradation banner.
 - Ops alerts: feed stale, match rate low, consumer lag, disk and memory.
 - Methodology page with definitions, data gaps and attribution.
-- Modes: bus, tram, U-Bahn, regional rail within Berlin; S-Bahn depends on feed coverage
-  (decision issue in M1).
+- Modes: bus, tram, U-Bahn, S-Bahn and regional rail within Berlin. S-Bahn confirmed
+  on 2026-11-18 from rush-hour feed data (issue #1); coverage per mode is monitored from M3.
 
 ## Non-goals for v1
 

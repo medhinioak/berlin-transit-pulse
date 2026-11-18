@@ -113,7 +113,10 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - The VBB static GTFS uses extended route types: 109 S-Bahn, 400s U-Bahn, 700s bus,
   900s tram, 100s regional rail, 1000s ferry.
 - VBB announces outages and rate-limit changes in https://production.gtfsrt.vbb.de/news.atom.xml.
-  The feed has been missing some data since 2026-06-04 (S-Bahn coverage under review).
+  VBB reports missing data since 2026-06-04; all modes, S-Bahn included, had live delays
+  at rush hour on 2026-11-18 (docs/troubleshooting.md).
+- The feed lists most of the day's S-Bahn trips in advance. Shares computed over all trips in
+  a snapshot are meaningless; count only trips that are running or have run.
 - Annual timetable change on 2026-12-13: the static GTFS version changes and trip IDs
   with it.
 - The release server is a t4g.small (arm64, 2 GB RAM): build arm64 images, keep Kafka's
