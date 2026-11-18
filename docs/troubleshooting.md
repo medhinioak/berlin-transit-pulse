@@ -8,6 +8,16 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 
 ## Feed
 
+### Static GTFS download sends no ETag or Last-Modified
+
+- **Seen:** 2026-11-18, #5 (schedule import), second `make up`.
+- **Symptom:** every `make up` downloaded the full ~84 MB static zip again, despite the cache.
+- **Cause:** `https://www.vbb.de/vbbgtfs` redirects (307) to `/gtfs`, which answers 200 with no
+  `ETag` or `Last-Modified`. A conditional request can't return 304.
+- **Fix:** a cached zip younger than `BTP_SCHEDULE_MAX_AGE_HOURS` (default 24) is used without a
+  request. Re-importing the same zip is a no-op anyway, because versions are keyed by SHA-256.
+- **Status:** _workaround_ (upstream)
+
 ### Realtime stop_ids that aren't in the static GTFS
 
 - **Seen:** 2026-11-18, #4 (feed fixtures), rush-hour snapshot 17:00 UTC.
@@ -48,6 +58,36 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 - **Cause:** excessive traffic on a budget shared by all consumers.
 - **Fix:** poll every 30 s, send gzip and If-None-Match, and a User-Agent with contact details.
 - **Status:** _fixed_ (by design)
+
+## Database
+
+### Two concurrent imports could mark the active version failed
+
+- **Seen:** 2026-11-18, #5 (schedule import), `/code-review` before the PR. It was never hit in a
+  real run.
+- **Symptom:** in theory, two imports of the same zip (compose `schedule-import` and a manual
+  `btp-schedule import`) both start loading. The second one hits a duplicate key once the first
+  commits. Its failure handler then set the version, now active, to `failed`, and every
+  `schedule.v_*` view went empty.
+- **Cause:** imports weren't serialised, and the failure handler updated the version
+  whatever its status.
+- **Fix:** imports hold a Postgres advisory lock for their whole run. The failure handler only
+  touches a row still in `importing`. An integration test runs two imports at once; it fails
+  without the lock (`duplicate key ... stops_pkey`).
+- **Status:** _fixed_
+
+### Validation query takes minutes right after a large COPY
+
+- **Seen:** 2026-11-18, #5 (schedule import), first real import.
+- **Symptom:** the 5.7M stop_times loaded in about 70 s. Then the check "every
+  `stop_times.trip_id` is in trips" ran for over 9 minutes at 100% CPU, until it was cancelled.
+- **Cause:** the data was loaded in the same transaction, so the planner had no statistics for
+  the new `version_id`. It estimated 1 row and chose a nested-loop anti-join that matched only
+  on `version_id`, which is quadratic.
+- **Fix:** `ANALYZE` each table right after its `COPY`, inside the transaction. The validation
+  now takes seconds. The cancelled run also showed the failure path working: the version was
+  marked `failed` and the active version was untouched.
+- **Status:** _fixed_
 
 ## Tooling
 

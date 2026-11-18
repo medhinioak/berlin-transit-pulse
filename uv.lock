@@ -179,10 +179,18 @@ version = "0.1.0"
 source = { editable = "services/schedule" }
 dependencies = [
     { name = "btp-common" },
+    { name = "httpx" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "tzdata" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "btp-common", editable = "libs/common" }]
+requires-dist = [
+    { name = "btp-common", editable = "libs/common" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.9" },
+    { name = "tzdata", specifier = ">=2025.2" },
+]
 
 [[package]]
 name = "certifi"

@@ -4,7 +4,8 @@
 2 GB RAM, arm64). The services are added to the same file by their own issues.
 
 ```sh
-make up            # start and wait until healthy
+make up            # start, wait until healthy and the schedule is imported
+BTP_FEED_MODE=fixtures make up   # same, offline: schedule from fixtures/
 make ps            # containers and health
 make kafka-topics  # describe topics
 make psql          # psql as the superuser
@@ -19,6 +20,7 @@ make down          # stop, keep data
 | `kafka` | `apache/kafka:4.4.0` | One broker in KRaft mode (broker and controller in one process, no ZooKeeper) |
 | `kafka-init` | `apache/kafka:4.4.0` | Creates the topics, then exits 0. Safe to re-run (`--if-not-exists`) |
 | `postgres` | `postgres:16.16` | Database `btp` with one schema per writing service |
+| `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. `BTP_FEED_MODE=fixtures` imports the mini GTFS offline (see `services/schedule/README.md`) |
 
 Topics are created only by `kafka-init`. Auto-creation is off, so a misspelt topic name
 fails instead of creating a new topic. `--if-not-exists` leaves an existing topic as it is:
@@ -72,6 +74,7 @@ Budgeted for the 2 GB release server:
 | `kafka` | 768 MB | heap `-Xms384m -Xmx512m`; the healthcheck CLI runs with `-Xmx64m` and only once a minute after start-up (each check is a JVM start: ~1.5 s CPU, ~+85 MB) |
 | `postgres` | 512 MB | `shared_buffers=128MB`, `shm_size: 128m` (counts toward the limit when used) |
 | `kafka-init` | 256 MB | runs once at start-up, then exits |
+| `schedule-import` | 384 MB | runs once at start-up; peak ~65 MB on the real feed (COPY streaming), Postgres peaks ~210 MB meanwhile |
 
 The services and the OS share the remaining ~700 MB. Check with `docker stats --no-stream`
 after adding anything.
@@ -79,7 +82,7 @@ after adding anything.
 ## Resetting
 
 The init SQL runs only when the Postgres volume is empty. To start from scratch (this deletes
-all Kafka and Postgres data):
+all Kafka and Postgres data, and the cached GTFS zip in the `schedule-cache` volume):
 
 ```sh
 docker compose -f deploy/compose/compose.yaml down -v

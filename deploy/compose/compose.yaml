@@ -96,6 +96,30 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # One-shot: imports the static GTFS as a new version and activates it, then exits 0.
+  # Re-running with an unchanged zip is a no-op. BTP_FEED_MODE=fixtures imports the mini GTFS
+  # from fixtures/ instead, with no network.
+  schedule-import:
+    build:
+      context: ../..
+      dockerfile: services/schedule/Dockerfile
+    command: ["btp-schedule", "import", "--activate"]
+    environment:
+      BTP_SERVICE_NAME: schedule
+      BTP_FEED_MODE: ${BTP_FEED_MODE:-live}
+      BTP_FEED_CONTACT: ${BTP_FEED_CONTACT:-https://github.com/medhinioak/berlin-transit-pulse}
+      BTP_PG_HOST: postgres
+      BTP_PG_SCHEDULE_PASSWORD: ${BTP_PG_SCHEDULE_PASSWORD:-dev_schedule}
+      BTP_FIXTURES_DIR: /fixtures
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 384m
+    volumes:
+      - schedule-cache:/cache
+      - ../../fixtures/gtfs-static/mini:/fixtures/gtfs-static/mini:ro
+    restart: "no"
+
   # Services are added here by their issues (ingest #7, schedule #5, processor #8,
   # metrics-api #9, web #10). Pattern:
   #
@@ -109,9 +133,12 @@ services:
   #   depends_on:
   #     kafka-init:
   #       condition: service_completed_successfully
+  #     schedule-import:        # services that read the schedule views
+  #       condition: service_completed_successfully
   #   mem_limit: 128m
   #   restart: unless-stopped
 
 volumes:
   kafka-data:
   postgres-data:
+  schedule-cache:

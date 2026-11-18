@@ -31,11 +31,11 @@ typecheck: ## mypy (strict) on every package
 	@set -e; for p in $(PACKAGES); do echo "mypy $$p"; uv run mypy $$p/src $$p/tests; done
 	@echo "mypy scripts"; uv run mypy scripts
 
-# --wait returns while kafka-init is still running; `wait` blocks until the topics exist
-# and fails if kafka-init failed.
-up: ## Start Kafka, Postgres and the services; waits until healthy and topics exist
-	$(COMPOSE) up -d --wait
-	$(COMPOSE) wait kafka-init
+# --wait returns while the one-shot containers are still running; `wait` blocks until they
+# finish and fails if one failed (topics created, schedule imported and active).
+up: ## Start Kafka, Postgres and the services; waits until healthy, topics and schedule exist
+	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) wait kafka-init schedule-import
 
 down: ## Stop the stack (keeps data; add -v by hand to reset volumes)
 	$(COMPOSE) down
