@@ -18,16 +18,21 @@ def fixtures_dir() -> Path:
     return Path(__file__).resolve().parents[4] / "fixtures"
 
 
-def load_rt_fixture(label: str) -> list[FeedMessage]:
-    """Return the trimmed realtime snapshots of one set (e.g. rush-hour), in recording order."""
+def rt_fixture_paths(label: str) -> list[Path]:
+    """Return the gzipped snapshot files of one set (e.g. rush-hour), in recording order."""
     paths = sorted((fixtures_dir() / "vbb-rt" / label).glob("*.pb.gz"))
     if not paths:
         raise FileNotFoundError(
             f"no realtime fixtures for label {label!r} in {fixtures_dir()} "
             "(outside the repo checkout, set BTP_FIXTURES_DIR)"
         )
+    return paths
+
+
+def load_rt_fixture(label: str) -> list[FeedMessage]:
+    """Return the trimmed realtime snapshots of one set (e.g. rush-hour), in recording order."""
     feeds = []
-    for path in paths:
+    for path in rt_fixture_paths(label):
         feed = FeedMessage()
         feed.ParseFromString(gzip.decompress(path.read_bytes()))
         feeds.append(feed)

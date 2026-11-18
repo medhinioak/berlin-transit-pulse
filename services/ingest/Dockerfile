@@ -35,5 +35,6 @@ COPY --from=build /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 USER btp
-# Placeholder until the service has an entry point (#7).
-CMD ["python", "-c", "import btp_ingest"]
+# Live mode needs BTP_FEED_CONTACT. Fixtures mode needs the fixtures mounted and
+# BTP_FIXTURES_DIR set (the compose service does both, #7).
+CMD ["btp-ingest"]

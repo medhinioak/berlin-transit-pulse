@@ -3,7 +3,14 @@ name = "btp-ingest"
 version = "0.1.0"
 description = "Ingest service: polls the VBB GTFS-RT feed and publishes changed trips."
 requires-python = ">=3.12"
-dependencies = ["btp-common"]
+dependencies = [
+    "btp-common",
+    "gtfs-realtime-bindings>=3.0.0",
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+btp-ingest = "btp_ingest.runner:main"
 
 [tool.uv.sources]
 btp-common = { workspace = true }
