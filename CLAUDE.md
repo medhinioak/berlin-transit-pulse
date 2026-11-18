@@ -22,7 +22,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Integration tests: make test-integration (needs make up)
 - Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy strict, per package)
 - Pre-commit hooks: uv run pre-commit run --all-files
-- Record new feed fixtures: make fixtures (polite to the feed; see Rules) (stub, #4)
+- Record new feed fixtures: make fixtures LABEL=rush-hour|evening (calls the live feed, needs
+  BTP_FEED_CONTACT; see fixtures/README.md and Rules)
 - Terraform: make tf-plan STACK=release (fmt, validate, plan). Never apply from here. (stub, #13)
 - GitHub: use the gh CLI for issues, PRs and CI
   (gh issue view N, gh pr checks, gh run view --log-failed)

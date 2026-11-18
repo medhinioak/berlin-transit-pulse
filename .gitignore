@@ -232,3 +232,6 @@ crash.log
 # Claude Code personal settings
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Full feed snapshots and the static GTFS zip (#4); only trimmed fixtures are committed.
+fixtures/local/
