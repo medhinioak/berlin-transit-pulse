@@ -26,3 +26,18 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 - **Cause:** excessive traffic on a budget shared by all consumers.
 - **Fix:** poll every 30 s, send gzip and If-None-Match, and a User-Agent with contact details.
 - **Status:** _fixed_ (by design)
+
+## Tooling
+
+### Workspace packages don't import on macOS after `uv sync`
+
+- **Seen:** 2026-11-18, #2 (repo scaffolding), first `make install` on the Mac.
+- **Symptom:** `uv pip list` shows all `btp-*` packages installed, but
+  `uv run python -c "import btp_common"` fails with `ModuleNotFoundError`.
+- **Cause:** macOS had set the `hidden` file flag (`ls -lO`) on most of the editable
+  `.pth` files in `.venv/lib/python3.12/site-packages/`. Python 3.12.13 skips hidden
+  `.pth` files, so the `src/` paths never reach `sys.path`. What sets the flag wasn't
+  pinned down; `.venv` itself was flagged too.
+- **Fix:** `make install` runs `chflags -R nohidden .venv` after `uv sync` on macOS.
+  If imports break after a plain `uv sync` or `uv add`, run `make install` again.
+- **Status:** _workaround_

@@ -1,0 +1,46 @@
+[tool.uv.workspace]
+members = ["services/*", "libs/*"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pre-commit>=4.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Test names say what they check; module docstrings are still required.
+"**/tests/**" = ["D101", "D102", "D103", "D105", "D106", "D107"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["btp_common", "btp_ingest", "btp_processor", "btp_schedule", "btp_metrics_jobs", "btp_metrics_api"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["services", "libs"]
+# importlib mode: every package has its own tests/test_smoke.py.
+addopts = "-m 'not integration' --import-mode=importlib"
+markers = [
+    "unit: fast tests with no external services (the default)",
+    "integration: needs the Docker services from `make up`",
+]
+
+[tool.coverage.run]
+source = ["services", "libs"]
+omit = ["*/tests/*"]
