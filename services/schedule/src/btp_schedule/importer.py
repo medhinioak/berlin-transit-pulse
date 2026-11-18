@@ -40,6 +40,8 @@ Connection = psycopg.Connection[Any]
 NON_EMPTY_TABLES = ("routes", "trips", "stops", "stop_times")
 # Statuses whose version is complete; importing the same zip again is a no-op.
 COMPLETE = ("ready", "active", "retired")
+# Session advisory lock held for a whole import, so two imports never run at once.
+IMPORT_LOCK = 0x5C4ED01E
 
 
 class ImportFailed(Exception):
@@ -93,9 +95,8 @@ def _copy(conn: Connection, table: str, rows: Iterable[Row]) -> int:
     return count
 
 
-def _load(conn: Connection, source: GtfsSource, version_id: str) -> dict[str, int]:
+def _load(conn: Connection, source: GtfsSource, names: set[str], version_id: str) -> dict[str, int]:
     """Stream every file into its table and return the row counts. Call inside a transaction."""
-    names = source.names()
     counts: dict[str, int] = {}
     berlin_trips: set[str] = set()
     berlin_routes: set[str] = set()
@@ -166,18 +167,43 @@ def import_source(
     """Import the feed at path as a new version, unless a complete version of it exists.
 
     Raises ImportFailed if loading or validation fails; the version is then marked failed and
-    the active version is untouched.
+    the active version is untouched. With activate_after, a new or ready version is activated;
+    a retired one is left alone, so a manual rollback survives the next `make up`.
     """
     source = GtfsSource(path)
     sha256 = source.sha256()
+    # A second import (e.g. compose and a manual run) waits here, then finds the version done.
+    conn.execute("SELECT pg_advisory_lock(%s)", (IMPORT_LOCK,))
+    try:
+        return _import_locked(conn, source, path, sha256, source_url, today, activate_after)
+    finally:
+        if not conn.broken:  # a lost connection has released the lock already
+            conn.execute("SELECT pg_advisory_unlock(%s)", (IMPORT_LOCK,))
+
+
+def _import_locked(
+    conn: Connection,
+    source: GtfsSource,
+    path: Path,
+    sha256: str,
+    source_url: str,
+    today: date,
+    activate_after: bool,
+) -> ImportResult:
+    """Run import_source while holding the import lock."""
     version_id = sha256[:12]
     row = conn.execute(
         "SELECT status FROM schedule.versions WHERE version_id = %s", (version_id,)
     ).fetchone()
     if row is not None and row[0] in COMPLETE:
         log.info("version %s already imported (%s), nothing to do", version_id, row[0])
-        if activate_after and row[0] != "active":
+        if activate_after and row[0] == "ready":
             activate(conn, version_id)
+        elif activate_after and row[0] == "retired":
+            log.warning(
+                "version %s is retired, not re-activating it; use `btp-schedule activate`",
+                version_id,
+            )
         return ImportResult(version_id, imported=False)
 
     # A failed or interrupted earlier attempt is retried. Its rows were never committed: data
@@ -197,10 +223,11 @@ def import_source(
     started = time.monotonic()
     try:
         with conn.transaction():
-            missing = [name for name in REQUIRED_FILES if name not in source.names()]
+            names = source.names()
+            missing = [name for name in REQUIRED_FILES if name not in names]
             if missing:
                 raise ImportFailed("; ".join(f"missing file {name}" for name in missing))
-            counts = _load(conn, source, version_id)
+            counts = _load(conn, source, names, version_id)
             date_range = _date_range(conn, version_id)
             errors = validation_errors(
                 counts, _unknown_trip_ids(conn, version_id), date_range, today
@@ -222,13 +249,18 @@ def import_source(
             )
     except (ImportFailed, psycopg.Error, ValueError, OSError, csv.Error, zipfile.BadZipFile) as exc:
         reason = str(exc) or type(exc).__name__
-        with conn.transaction():
-            conn.execute(
-                "UPDATE schedule.versions SET status = 'failed', failure_reason = %s "
-                "WHERE version_id = %s",
-                (reason, version_id),
-            )
         log.error("version %s failed: %s", version_id, reason)
+        try:
+            with conn.transaction():
+                # Only our own attempt: never overwrite a version that is ready or active.
+                conn.execute(
+                    "UPDATE schedule.versions SET status = 'failed', failure_reason = %s "
+                    "WHERE version_id = %s AND status = 'importing'",
+                    (reason, version_id),
+                )
+        except psycopg.Error as record_exc:
+            # E.g. the connection is gone. The row stays 'importing' and is retried next time.
+            log.error("could not record the failure of %s: %s", version_id, record_exc)
         raise ImportFailed(reason) from exc
     log.info("version %s ready in %.1f s", version_id, time.monotonic() - started)
     if activate_after:

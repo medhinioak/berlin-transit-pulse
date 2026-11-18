@@ -4,6 +4,8 @@ import json
 import os
 import time
 import zipfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,16 @@ def _no_network(*args: Any, **kwargs: Any) -> Any:
     raise httpx.ConnectError("no network in tests")
 
 
+def _serving(status: int, content: bytes = b"") -> Callable[..., Any]:
+    """Stand-in for httpx.stream that answers every request with one response."""
+
+    @contextmanager
+    def stream(method: str, url: str, **kwargs: Any) -> Iterator[httpx.Response]:
+        yield httpx.Response(status, content=content, request=httpx.Request(method, url))
+
+    return stream
+
+
 def test_fresh_cache_is_used_without_a_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -54,3 +66,29 @@ def test_no_cache_and_no_network_fails(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(httpx, "stream", _no_network)
     with pytest.raises(httpx.ConnectError):
         download.fetch(URL, tmp_path, "contact", max_age_hours=24)
+
+
+def test_invalid_zip_falls_back_to_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 200 with an HTML page instead of a zip keeps the cached zip and leaves no .part file."""
+    cached = _cache(tmp_path, age_hours=48)
+    before = cached.read_bytes()
+    monkeypatch.setattr(httpx, "stream", _serving(200, b"<html>maintenance</html>"))
+    assert download.fetch(URL, tmp_path, "contact", max_age_hours=24) == cached
+    assert cached.read_bytes() == before
+    assert not (tmp_path / "gtfs.zip.part").exists()
+
+
+def test_invalid_zip_without_cache_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a cache an invalid download is an error and leaves nothing behind."""
+    monkeypatch.setattr(httpx, "stream", _serving(200, b"<html>maintenance</html>"))
+    with pytest.raises(zipfile.BadZipFile):
+        download.fetch(URL, tmp_path, "contact", max_age_hours=24)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_not_modified_restarts_max_age(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 304 keeps the cached zip and makes it fresh again, so the next run sends no request."""
+    cached = _cache(tmp_path, age_hours=48)
+    monkeypatch.setattr(httpx, "stream", _serving(304))
+    assert download.fetch(URL, tmp_path, "contact", max_age_hours=24) == cached
+    assert time.time() - cached.stat().st_mtime < 60

@@ -5,6 +5,7 @@ BTP_PG_PORT, BTP_PG_SCHEDULE_PASSWORD). The version that was active before is re
 """
 
 import os
+import threading
 import zipfile
 from collections.abc import Iterator
 from datetime import date
@@ -16,7 +17,13 @@ import pytest
 from psycopg import sql
 
 from btp_common.fixtures import mini_gtfs_dir
-from btp_schedule.importer import ImportFailed, activate, apply_schema, import_source
+from btp_schedule.importer import (
+    ImportFailed,
+    ImportResult,
+    activate,
+    apply_schema,
+    import_source,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -68,10 +75,9 @@ def _count(conn: psycopg.Connection[Any], view: str) -> int:
     return int(row[0])
 
 
-@pytest.fixture
-def conn() -> Iterator[psycopg.Connection[Any]]:
-    """Connect as btp_schedule; afterwards delete the versions the test made, restore the active."""
-    with psycopg.connect(
+def _connect() -> psycopg.Connection[Any]:
+    """Connect as btp_schedule in autocommit mode."""
+    return psycopg.connect(
         host=os.environ.get("BTP_PG_HOST", "localhost"),
         port=int(os.environ.get("BTP_PG_PORT", "5432")),
         dbname="btp",
@@ -79,7 +85,13 @@ def conn() -> Iterator[psycopg.Connection[Any]]:
         password=os.environ.get("BTP_PG_SCHEDULE_PASSWORD", "dev_schedule"),
         autocommit=True,
         connect_timeout=5,
-    ) as conn:
+    )
+
+
+@pytest.fixture
+def conn() -> Iterator[psycopg.Connection[Any]]:
+    """Connect as btp_schedule; afterwards delete the versions the test made, restore the active."""
+    with _connect() as conn:
         apply_schema(conn)
         before = {r[0] for r in conn.execute("SELECT version_id FROM schedule.versions")}
         previously_active = _active(conn)
@@ -139,6 +151,42 @@ def test_import_reimport_and_switch(conn: psycopg.Connection[Any], tmp_path: Pat
 
     activate(conn, first.version_id)  # a retired version can be re-activated (rollback)
     assert _active(conn) == first.version_id
+
+    # The next `import --activate` of the newer zip must not undo that rollback.
+    again = import_source(conn, second_zip, "test:second", today=TODAY, activate_after=True)
+    assert not again.imported
+    assert _status(conn, second.version_id) == "retired"
+    assert _active(conn) == first.version_id
+
+
+def test_concurrent_imports_of_same_zip(conn: psycopg.Connection[Any], tmp_path: Path) -> None:
+    """Two imports at once: one imports and activates, the other waits and finds it done."""
+    zip_path = _zip(
+        tmp_path / "same.zip",
+        replace={"agency.txt": "agency_id,agency_name\n1,concurrent\n"},
+    )
+    results: list[ImportResult | Exception] = []
+
+    def run() -> None:
+        with _connect() as other:
+            try:
+                results.append(
+                    import_source(other, zip_path, "test:same", today=TODAY, activate_after=True)
+                )
+            except Exception as exc:  # reported by the assertions below
+                results.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+
+    ok = [r for r in results if isinstance(r, ImportResult)]
+    assert len(ok) == 2, results
+    assert sorted(r.imported for r in ok) == [False, True]
+    assert ok[0].version_id == ok[1].version_id
+    assert _status(conn, ok[0].version_id) == "active"
 
 
 def test_failed_import_leaves_active_version(conn: psycopg.Connection[Any], tmp_path: Path) -> None:

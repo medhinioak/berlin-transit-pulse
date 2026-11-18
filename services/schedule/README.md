@@ -20,6 +20,13 @@ uv run btp-schedule status                    # versions, feed dates, row counts
 `BTP_FEED_MODE=fixtures`, imports `fixtures/gtfs-static/mini` without network.
 Every command first applies `src/btp_schedule/sql/*.sql` (idempotent) as `btp_schedule`.
 
+Imports hold a Postgres advisory lock, so two at once (compose and a manual run) are
+serialised: the second waits, then finds the version already imported.
+
+`--activate` activates a new or `ready` version. It never re-activates a `retired` one: after a
+rollback with `btp-schedule activate <older>`, the next `make up` leaves the rollback in place.
+To go forward again, run `btp-schedule activate <newer>` by hand.
+
 In compose, the one-shot container `schedule-import` runs `import --activate` on `make up` and
 exits. `make up` waits for it. Services that read the schedule depend on it with
 `condition: service_completed_successfully`.
@@ -35,10 +42,15 @@ exits. `make up` waits for it. Services that read the schedule depend on it with
 | `BTP_FEED_MODE` | `live` | `fixtures` imports the mini GTFS |
 
 VBB's download sends no ETag or Last-Modified, so the cache can't be revalidated cheaply. Every
-request transfers the full ~84 MB. That's why a fresh cache is used without asking. If the
-download fails and a cached zip exists, the cached zip is imported.
+request transfers the full ~84 MB. That's why a fresh cache is used without asking. A 304
+(should VBB ever send validators) restarts the max-age window. If the download fails or returns
+something that isn't a zip (an HTML error page, a truncated body), the cached zip is imported
+and no `.part` file is left. Without a cache, that is an error.
 
 ## Versioning model
+
+The decision and its alternatives are recorded in
+[ADR-0009](../../docs/adr/0009-version-static-gtfs-and-swap-atomically.md).
 
 - **Version id**: the first 12 hex characters of the zip's SHA-256 (for a folder, of its file
   names and contents). Importing the same zip again does nothing.
@@ -58,7 +70,9 @@ download fails and a cached zip exists, the cached zip is imported.
     since VBB has none, from calendar and calendar_dates.
 
   On failure the version becomes `failed` with the reason, its rows are rolled back, and the
-  active version is untouched.
+  active version is untouched. Only the import's own `importing` row is ever marked `failed`. If
+  the connection is lost and even that can't be recorded, the row stays `importing` and the
+  next import retries it.
 - **Activation** is one transaction: the active version becomes `retired` and the new one
   `active`. Views switch atomically. A retired version can be re-activated to roll back.
 - **Times**: `arrival_time` and `departure_time` keep the GTFS text. `arrival_secs` and
@@ -74,6 +88,9 @@ download fails and a cached zip exists, the cached zip is imported.
   weekly refresh).
 
 ## Berlin filter
+
+The rule and its alternatives are recorded in
+[ADR-0017](../../docs/adr/0017-define-berlin-and-mode-from-stop-ids-and-route-types.md).
 
 A trip is in Berlin (`trips.in_berlin`) if any of its stops has a `stop_id` starting with
 `de:11000:`, Berlin's state code in the German stop-ID scheme (DHID). A route is in Berlin
@@ -101,6 +118,17 @@ A trip is in Berlin (`trips.in_berlin`) if any of its stops has a `stop_id` star
   would change no trip and no route: every trip that stops at such a platform also has a
   `de:11000:` stop. Check this again after the timetable change on 2026-12-13.
 
+## Known limitations (for #24, weekly refresh)
+
+- **No pruning:** retired and failed versions are never deleted. At ~1 GB each, they have to be
+  pruned before the weekly refresh runs for long.
+- **Staging early:** validation needs the feed's date range to cover today. A zip published
+  before its start date (e.g. the timetable starting on 2026-12-13) fails instead of becoming
+  `ready`, and `make up` then fails because `schedule-import` exits 1. The active version stays
+  in place.
+- **Fixture expiry:** the mini fixture's calendar ends on 2027-12-11. After that,
+  `BTP_FEED_MODE=fixtures` imports fail validation until the fixtures are re-recorded.
+
 ## Tests
 
 ```sh
@@ -108,5 +136,12 @@ uv run pytest services/schedule                       # unit
 make up && uv run pytest -m integration services/schedule
 ```
 
-The integration tests import zips built from the mini fixture: a re-import, a second version,
-switching and a failed import. They restore the version that was active before.
+The integration tests import zips built from the mini fixture. They cover:
+
+- a re-import;
+- a second version and switching;
+- a rollback that `import --activate` must not undo;
+- two concurrent imports of the same zip;
+- a failed import.
+
+They restore the version that was active before.
