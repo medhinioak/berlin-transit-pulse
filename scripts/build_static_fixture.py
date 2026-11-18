@@ -97,20 +97,31 @@ def build(gtfs_zip: Path, rt_dir: Path, out_dir: Path) -> tuple[dict[str, int], 
     return counts, unknown_rt_stops
 
 
-def download(path: Path) -> None:
-    """Download the static GTFS zip once, politely, to the cache path."""
+def ensure_zip(path: Path) -> Path:
+    """Return the cached static GTFS zip, downloading it first if it's missing.
+
+    The download goes to a .part file that is renamed only when complete, so an interrupted
+    download is never mistaken for a cached zip.
+    """
+    if path.exists():
+        return path
+    print(f"downloading {STATIC_URL} to {path}")
     contact = os.environ.get("BTP_FEED_CONTACT", "").strip()
     if not contact:
         raise SystemExit("BTP_FEED_CONTACT is not set (needed to download the static GTFS)")
     path.parent.mkdir(parents=True, exist_ok=True)
     headers = {"User-Agent": f"berlin-transit-pulse/0.1 (+{contact})"}
+    part = path.with_name(path.name + ".part")
     with httpx.stream(
         "GET", STATIC_URL, headers=headers, follow_redirects=True, timeout=300.0
     ) as response:
         response.raise_for_status()
-        with path.open("wb") as f:
+        with part.open("wb") as f:
             for chunk in response.iter_bytes():
                 f.write(chunk)
+    zipfile.ZipFile(part).close()  # fails on a broken download, leaving only the .part file
+    part.rename(path)
+    return path
 
 
 def main() -> int:
@@ -123,9 +134,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("fixtures/gtfs-static/mini"))
     args = parser.parse_args()
 
-    if not args.gtfs_zip.exists():
-        print(f"downloading {STATIC_URL} to {args.gtfs_zip}")
-        download(args.gtfs_zip)
+    ensure_zip(args.gtfs_zip)
     counts, unknown_rt_stops = build(args.gtfs_zip, args.rt_dir, args.out)
     sha = hashlib.sha256(args.gtfs_zip.read_bytes()).hexdigest()
     zip_time = datetime.fromtimestamp(args.gtfs_zip.stat().st_mtime, tz=UTC)

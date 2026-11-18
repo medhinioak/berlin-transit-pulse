@@ -1,8 +1,10 @@
 """Tests for the recorder's rate guard and request helpers."""
 
+import gzip
+
 import httpx
 import pytest
-from record_fixtures import MIN_INTERVAL_S, Pacer, retry_after_s, user_agent
+from record_fixtures import MAX_RETRIES, MIN_INTERVAL_S, Pacer, fetch_raw, retry_after_s, user_agent
 
 
 class FakeClock:
@@ -82,3 +84,49 @@ def test_retry_after_parsing(header: str | None, expected: float) -> None:
 def test_user_agent_carries_contact() -> None:
     """The User-Agent names the project and the contact, as VBB asks."""
     assert user_agent("https://example.org") == "berlin-transit-pulse/0.1 (+https://example.org)"
+
+
+Scripted = tuple[int, bytes, dict[str, str]] | Exception
+
+
+def _fetch(responses: list[Scripted]) -> tuple[list[float], object]:
+    """Run fetch_raw against scripted (status, body, headers) replies or exceptions."""
+    clock = FakeClock()
+    calls = iter(responses)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nxt = next(calls)
+        if isinstance(nxt, Exception):
+            raise nxt
+        status, body, headers = nxt
+        return httpx.Response(status, headers=headers, stream=httpx.ByteStream(body))
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    pacer = Pacer(10, clock=clock.time, sleep=clock.sleep)
+    try:
+        result: object = fetch_raw(client, pacer, etag='"v1"')
+    except RuntimeError as exc:
+        result = exc
+    return clock.sleeps, result
+
+
+def test_server_errors_are_retried_then_given_up() -> None:
+    """5xx responses are retried MAX_RETRIES times, each attempt paced, then it raises."""
+    sleeps, result = _fetch([(503, b"", {})] * (MAX_RETRIES + 1))
+    assert isinstance(result, RuntimeError) and "attempts" in str(result)
+    assert sleeps == [10] * MAX_RETRIES
+
+
+def test_network_errors_are_retried() -> None:
+    """A timeout is retried like a 5xx; the next good response is returned gzipped."""
+    sleeps, result = _fetch([httpx.ReadTimeout("slow"), (200, b"feed", {"etag": '"v2"'})])
+    assert sleeps == [10]
+    assert isinstance(result, tuple)
+    status, raw, etag = result
+    assert (status, gzip.decompress(raw), etag) == (200, b"feed", '"v2"')
+
+
+def test_not_modified_keeps_the_etag() -> None:
+    """A 304 returns no body and the ETag that was sent."""
+    _, result = _fetch([(304, b"", {})])
+    assert result == (304, b"", '"v1"')

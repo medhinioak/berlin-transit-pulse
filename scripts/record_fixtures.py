@@ -10,6 +10,7 @@ import argparse
 import gzip
 import json
 import os
+import shutil
 import sys
 import time
 from collections.abc import Callable
@@ -22,6 +23,8 @@ from google.transit import gtfs_realtime_pb2
 FEED_URL = "https://production.gtfsrt.vbb.de/data"
 MIN_INTERVAL_S = 10.0
 MAX_RETRIES = 3
+# Give up when the feed hasn't changed for this many polls in a row (a stalled feed).
+MAX_NOT_MODIFIED = 10
 
 
 class Pacer:
@@ -67,25 +70,33 @@ def retry_after_s(response: httpx.Response) -> float:
 def fetch_raw(
     client: httpx.Client, pacer: Pacer, etag: str | None
 ) -> tuple[int, bytes, str | None]:
-    """GET the feed once (with retries on 429/5xx); return status, gzipped body and ETag."""
+    """GET the feed, retrying 429, 5xx and network errors; return status, gzipped body and ETag.
+
+    Every attempt, retries included, goes through the pacer.
+    """
     headers = {"If-None-Match": etag} if etag else {}
     extra_wait = 0.0
-    for attempt in range(MAX_RETRIES + 1):
+    attempts = MAX_RETRIES + 1
+    for attempt in range(1, attempts + 1):
         pacer.wait(extra_wait)
-        with client.stream("GET", FEED_URL, headers=headers) as response:
-            raw = b"".join(response.iter_raw())
-            status = response.status_code
-            if status == 429 or status >= 500:
-                extra_wait = retry_after_s(response)
-                print(f"  HTTP {status}, retry {attempt + 1}/{MAX_RETRIES}", file=sys.stderr)
-                continue
-            if status == 304:
-                return status, b"", etag
-            response.raise_for_status()
-            if response.headers.get("content-encoding", "").lower() != "gzip":
-                raw = gzip.compress(raw)
-            return status, raw, response.headers.get("etag")
-    raise RuntimeError(f"feed still failing after {MAX_RETRIES} retries")
+        extra_wait = 0.0
+        try:
+            with client.stream("GET", FEED_URL, headers=headers) as response:
+                raw = b"".join(response.iter_raw())
+                status = response.status_code
+                if status == 429 or status >= 500:
+                    extra_wait = retry_after_s(response)
+                    print(f"  HTTP {status} (attempt {attempt}/{attempts})", file=sys.stderr)
+                    continue
+                if status == 304:
+                    return status, b"", etag
+                response.raise_for_status()
+                if response.headers.get("content-encoding", "").lower() != "gzip":
+                    raw = gzip.compress(raw)
+                return status, raw, response.headers.get("etag")
+        except httpx.TransportError as exc:
+            print(f"  {type(exc).__name__} (attempt {attempt}/{attempts})", file=sys.stderr)
+    raise RuntimeError(f"feed still failing after {attempts} attempts")
 
 
 def describe(raw_gz: bytes) -> str:
@@ -117,27 +128,36 @@ def main() -> int:
         return 2
     pacer = Pacer(args.interval)
     out = args.out / args.label
-    out.mkdir(parents=True, exist_ok=True)
-    # A set is one consecutive recording: drop snapshots from an earlier run of this label.
-    for old in [*out.glob("*.pb.gz"), *out.glob("*.json")]:
-        old.unlink()
+    # Record into a fresh folder and swap it in only when complete, so a failed run never
+    # destroys the previous recording of this label.
+    partial = args.out / f"{args.label}.partial"
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
 
     etag: str | None = None
     saved = 0
+    not_modified = 0
     headers = {"User-Agent": user_agent(contact), "Accept-Encoding": "gzip"}
     with httpx.Client(headers=headers, timeout=60.0) as client:
         while saved < args.count:
             status, raw, etag = fetch_raw(client, pacer, etag)
             if status == 304:
-                print("  HTTP 304 not modified, skipped")
+                not_modified += 1
+                print(f"  HTTP 304 not modified, skipped ({not_modified}/{MAX_NOT_MODIFIED})")
+                if not_modified >= MAX_NOT_MODIFIED:
+                    print("feed looks stalled; previous recording kept", file=sys.stderr)
+                    return 1
                 continue
+            not_modified = 0
             now = datetime.now(UTC)
             stamp = now.strftime("%Y%m%dT%H%M%SZ")
-            (out / f"{stamp}.pb.gz").write_bytes(raw)
+            (partial / f"{stamp}.pb.gz").write_bytes(raw)
             meta = {"fetched_at": now.isoformat(), "http_status": status, "etag": etag}
-            (out / f"{stamp}.json").write_text(json.dumps(meta, indent=2) + "\n")
+            (partial / f"{stamp}.json").write_text(json.dumps(meta, indent=2) + "\n")
             saved += 1
             print(f"[{saved}/{args.count}] HTTP {status} {stamp}: {describe(raw)}")
+    shutil.rmtree(out, ignore_errors=True)
+    partial.rename(out)
     return 0
 
 

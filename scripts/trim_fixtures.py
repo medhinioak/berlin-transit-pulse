@@ -20,6 +20,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from build_static_fixture import ensure_zip
 from google.transit import gtfs_realtime_pb2
 
 CANCELED = gtfs_realtime_pb2.TripDescriptor.CANCELED
@@ -171,7 +172,7 @@ def trimmed(
 
 def read_route_modes(gtfs_zip: Path) -> dict[str, str]:
     """Read routes.txt from the static GTFS zip and map route_id to mode."""
-    with zipfile.ZipFile(gtfs_zip) as z, z.open("routes.txt") as f:
+    with zipfile.ZipFile(ensure_zip(gtfs_zip)) as z, z.open("routes.txt") as f:
         rows = csv.DictReader(io.TextIOWrapper(f, "utf-8-sig"))
         return {r["route_id"]: mode_for_route_type(int(r["route_type"])) for r in rows}
 

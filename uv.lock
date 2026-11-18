@@ -19,7 +19,6 @@ members = [
 [manifest.dependency-groups]
 dev = [
     { name = "confluent-kafka", specifier = ">=2.16.2" },
-    { name = "gtfs-realtime-bindings", specifier = ">=3.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "pre-commit", specifier = ">=4.0" },
@@ -126,7 +125,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gtfs-realtime-bindings", specifier = ">=2.0" },
+    { name = "gtfs-realtime-bindings", specifier = ">=3.0" },
     { name = "pydantic-settings", specifier = ">=2.6" },
 ]
 
