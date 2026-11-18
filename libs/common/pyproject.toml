@@ -1,9 +1,9 @@
 [project]
 name = "btp-common"
 version = "0.1.0"
-description = "Shared helpers for all services: config loading and JSON logging."
+description = "Shared helpers for all services: config loading, JSON logging, feed fixtures."
 requires-python = ">=3.12"
-dependencies = ["pydantic-settings>=2.6"]
+dependencies = ["pydantic-settings>=2.6", "gtfs-realtime-bindings>=3.0"]
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]

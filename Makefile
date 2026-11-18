@@ -29,6 +29,7 @@ fmt: ## Format and auto-fix with ruff
 
 typecheck: ## mypy (strict) on every package
 	@set -e; for p in $(PACKAGES); do echo "mypy $$p"; uv run mypy $$p/src $$p/tests; done
+	@echo "mypy scripts"; uv run mypy scripts
 
 # --wait returns while kafka-init is still running; `wait` blocks until the topics exist
 # and fails if kafka-init failed.
@@ -51,8 +52,12 @@ kafka-topics: ## Describe all Kafka topics
 psql: ## Open psql as the Postgres superuser
 	$(COMPOSE) exec postgres psql -U postgres -d btp
 
-fixtures: ## Record new feed fixtures (not yet: see #4)
-	@echo "make $@: not implemented yet, see #4"; exit 1
+# Calls the live feed: at most one request per 10 s (default 30 s). Needs BTP_FEED_CONTACT.
+fixtures: ## Record a fixture set (LABEL=rush-hour|evening, COUNT=4), trim it, rebuild mini GTFS
+	@test -n "$(LABEL)" || { echo "usage: make fixtures LABEL=rush-hour|evening [COUNT=4]"; exit 1; }
+	uv run python scripts/record_fixtures.py --label $(LABEL) --count $(or $(COUNT),4)
+	uv run python scripts/trim_fixtures.py fixtures/local/vbb-rt/$(LABEL) --out fixtures/vbb-rt/$(LABEL)
+	uv run python scripts/build_static_fixture.py
 
 tf-plan: ## Terraform fmt, validate, plan (not yet: see #13)
 	@echo "make $@: not implemented yet, see #13"; exit 1
