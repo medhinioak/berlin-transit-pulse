@@ -15,8 +15,8 @@ help: ## List targets
 install: ## Install all workspace packages and dev tools
 	uv sync --all-packages
 
-test: ## Unit tests with coverage
-	uv run pytest --cov
+test: ## Unit tests with coverage (terminal report and coverage.xml)
+	uv run pytest --cov --cov-report=term-missing --cov-report=xml
 
 test-integration: ## Integration tests (needs `make up`)
 	uv run pytest -m integration

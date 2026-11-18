@@ -1,4 +1,7 @@
 # berlin-transit-pulse
+
+[![CI](https://github.com/medhinioak/berlin-transit-pulse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/medhinioak/berlin-transit-pulse/actions/workflows/ci.yml)
+
 Live reliability metrics for Berlin public transport, built from VBB’s open realtime feed.
 
 ## Develop locally
