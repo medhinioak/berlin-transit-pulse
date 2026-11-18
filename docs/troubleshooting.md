@@ -61,6 +61,21 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 
 ## Database
 
+### Two concurrent imports could mark the active version failed
+
+- **Seen:** 2026-11-18, #5 (schedule import), `/code-review` before the PR. It was never hit in a
+  real run.
+- **Symptom:** in theory, two imports of the same zip (compose `schedule-import` and a manual
+  `btp-schedule import`) both start loading. The second one hits a duplicate key once the first
+  commits. Its failure handler then set the version, now active, to `failed`, and every
+  `schedule.v_*` view went empty.
+- **Cause:** imports weren't serialised, and the failure handler updated the version
+  whatever its status.
+- **Fix:** imports hold a Postgres advisory lock for their whole run. The failure handler only
+  touches a row still in `importing`. An integration test runs two imports at once; it fails
+  without the lock (`duplicate key ... stops_pkey`).
+- **Status:** _fixed_
+
 ### Validation query takes minutes right after a large COPY
 
 - **Seen:** 2026-11-18, #5 (schedule import), first real import.

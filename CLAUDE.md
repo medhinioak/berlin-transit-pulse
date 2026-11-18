@@ -121,5 +121,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
   a snapshot are meaningless; count only trips that are running or have run.
 - Annual timetable change on 2026-12-13: the static GTFS version changes and trip IDs
   with it.
+- Consumers read the schedule only through the schedule.v_* views (active version, ADR-0009);
+  the tables hold every version and trip_ids change between them. A Berlin trip has any stop
+  with a de:11000: stop_id (ADR-0017).
 - The release server is a t4g.small (arm64, 2 GB RAM): build arm64 images, keep Kafka's
   heap at about 384–512 MB, and check memory after adding anything to compose.
