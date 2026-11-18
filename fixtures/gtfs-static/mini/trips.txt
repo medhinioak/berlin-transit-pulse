@@ -1,15 +1,25 @@
 route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed
 28259_100,100,310021339,"Elsterwerda, Bahnhof",62022,1,,981,1,1
+28259_100,114,310021341,"Elsterwerda, Bahnhof",62030,1,,981,1,1
 28258_100,26,310021170,"Rangsdorf, Bahnhof",62075,0,,957,1,1
+28258_100,3,310021213,S Südkreuz Bhf (Berlin),62081,0,,958,1,1
 28258_100,26,310021247,"Nauen, Bahnhof",62074,1,,961,1,1
 23945_100,112,309321306,"Frankfurt (Oder), Bahnhof",33735,0,,884,1,1
 23945_100,165,309321104,"Frankfurt (Oder), Bahnhof",33777,0,,853,1,1
+23945_100,166,309321107,"Frankfurt (Oder), Bahnhof",33783,0,,853,1,1
+23945_100,171,309321159,S Charlottenburg Bhf (Berlin),73785,0,,860,1,1
 23945_100,112,309321194,"Frankfurt (Oder), Bahnhof",75863,0,,867,1,1
 23945_100,165,309321124,S Ostbahnhof (Berlin),33786,1,,854,1,1
 23944_100,3,277019355,"Beelitz, Stadt Bhf",62226,1,,849,1,1
+16349_100,3,307793781,"Rathenow, Bahnhof",62192,1,,804,1,1
+16345_100,26,277019307,"Jüterbog, Bahnhof",62152,1,,799,1,1
+28712_700,1,311443439,U Paulsternstr. (Berlin),,0,,3747,1,2
 26780_700,26,311444315,S Blankenburg (Berlin),,0,,3716,1,2
+24641_900,26,311451554,Betriebshof Lichtenberg (Berlin),,1,,2531,1,2
+23415_700,232,311469912,"Berlin, Tunnelstr.",,0,,3692,1,2
 23415_700,232,311469766,U Berliner Str. (Berlin),,1,,3698,1,2
 23415_700,232,311469559,U Berliner Str. (Berlin),,1,,3698,1,2
+23414_700,3,311414695,U Berliner Str. (Berlin),,0,,3681,1,2
 23414_700,26,311414644,Brixplatz (Berlin),,1,,3685,1,2
 22754_700,26,311465140,U Haselhorst (Berlin),,0,,3646,1,2
 22609_700,26,311449808,S Schönefeld (bei Berlin),,0,,3625,1,2
@@ -17,11 +27,23 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,
 17532_700,26,311493138,Wilhelmsruher Damm (Berlin),,0,,3466,1,2
 17532_700,26,311493018,Wilhelmsruher Damm (Berlin),,0,,3466,1,2
 17532_700,26,311492924,"Berlin, Galenstr.",,1,,3468,1,2
+17530_700,1,311492262,S Schöneweide/Sterndamm (Berlin),,0,,3446,1,2
 17529_700,26,311491972,"Teltow, Rammrath-Brücke",,0,,3432,1,2
 17526_400,278,310006690,S+U Rathaus Steglitz (Berlin),,0,,3404,1,1
 17525_400,275,310005880,S+U Hermannstr. (Berlin),,0,,3392,1,1
 17525_400,275,310005884,S+U Hermannstr. (Berlin),,0,,3392,1,1
 17525_400,53,310005885,S+U Hermannstr. (Berlin),,0,,3392,1,1
+17525_400,276,310005916,S+U Hermannstr. (Berlin),,0,,3392,1,1
+17525_400,276,310005922,S+U Hermannstr. (Berlin),,0,,3392,1,1
+17525_400,276,310005921,S+U Hermannstr. (Berlin),,0,,3395,1,1
+17525_400,276,310005923,S+U Hermannstr. (Berlin),,0,,3395,1,1
+17525_400,3,311488978,S+U Wittenau (Berlin),,1,,3398,1,1
+17525_400,3,311488982,S+U Wittenau (Berlin),,1,,3398,1,1
+17525_400,1,311488983,U Paracelsus-Bad (Berlin),,1,,3401,1,1
+17523_400,1,311488765,U Britz-Süd (Berlin),,0,,3366,1,1
+17523_400,1,311488769,U Britz-Süd (Berlin),,0,,3366,1,1
+17523_400,239,311488766,U Rudow (Berlin),,0,,3365,1,1
+17523_400,239,311488770,U Rudow (Berlin),,0,,3365,1,1
 17523_400,3,311488662,U Rudow (Berlin),,0,,3386,1,1
 17523_400,3,311488664,U Rudow (Berlin),,0,,3386,1,1
 17523_400,3,311488667,U Rudow (Berlin),,0,,3386,1,1
@@ -30,126 +52,258 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,
 17523_400,3,311488259,S+U Rathaus Spandau (Berlin),,1,,3376,1,1
 17523_400,3,311488269,S+U Rathaus Spandau (Berlin),,1,,3376,1,1
 17523_400,3,311488271,S+U Rathaus Spandau (Berlin),,1,,3376,1,1
+17523_400,26,311488297,U Rohrdamm (Berlin),,1,,3381,1,1
+17523_400,1,311488299,U Rohrdamm (Berlin),,1,,3381,1,1
 17521_400,26,311485311,U Alt-Mariendorf (Berlin),,0,,3360,1,1
+17521_400,1,311485424,U Alt-Mariendorf (Berlin),,0,,3360,1,1
+17521_400,3,311485485,U Alt-Mariendorf (Berlin),,0,,3360,1,1
 17521_400,326,310001847,U Kurt-Schumacher-Platz (Berlin),,1,,3341,1,1
+17520_700,232,311487938,U Alt-Tegel (Berlin),,0,,3322,1,2
 17518_400,369,310001442,S+U Berlin Hauptbahnhof,,0,,3292,1,1
 17518_400,369,310001446,S+U Berlin Hauptbahnhof,,0,,3292,1,1
 17518_400,369,310001453,S+U Berlin Hauptbahnhof,,0,,3292,1,1
 17518_400,369,310001454,S+U Berlin Hauptbahnhof,,0,,3292,1,1
+17518_400,296,310000915,U Friedrichsfelde (Berlin),,1,,3315,1,1
 17518_400,369,310000872,U Hönow (Berlin),,1,,3307,1,1
 17516_400,391,310000430,S+U Innsbrucker Platz (Berlin),,0,,3289,1,1
 17515_400,26,311483451,U Krumme Lanke (Berlin),,0,,3268,1,1
+17515_400,26,311483477,U Krumme Lanke (Berlin),,0,,3268,1,1
+17515_400,26,311483478,U Krumme Lanke (Berlin),,0,,3268,1,1
 17515_400,26,311482322,S+U Warschauer Str. (Berlin),,1,,3285,1,1
 17515_400,26,311482325,S+U Warschauer Str. (Berlin),,1,,3285,1,1
+17515_400,26,311482354,S+U Warschauer Str. (Berlin),,1,,3285,1,1
+17515_400,26,311482356,S+U Warschauer Str. (Berlin),,1,,3285,1,1
+17515_400,26,311482358,S+U Warschauer Str. (Berlin),,1,,3285,1,1
+17514_400,276,309999206,U Ruhleben (Berlin),,0,,3224,1,1
+17514_400,276,309999216,U Ruhleben (Berlin),,0,,3224,1,1
 17514_400,407,309999143,U Theodor-Heuss-Platz (Berlin),,0,,3228,1,1
 17514_400,407,309999147,U Theodor-Heuss-Platz (Berlin),,0,,3228,1,1
 17514_400,406,309999153,U Theodor-Heuss-Platz (Berlin),,0,,3228,1,1
+17514_400,424,309999305,U Theodor-Heuss-Platz (Berlin),,0,,3228,1,1
 17514_400,3,311481277,S+U Pankow (Berlin),,1,,3257,1,1
+17514_400,1,311481311,S+U Pankow (Berlin),,1,,3257,1,1
 17514_400,26,311481272,S+U Pankow (Berlin),,1,,3262,1,1
+17514_400,1,311481312,S+U Pankow (Berlin),,1,,3262,1,1
+17514_400,1,311481316,S+U Pankow (Berlin),,1,,3262,1,1
+17512_400,3,311480732,U Uhlandstr. (Berlin),,0,,3219,1,1
+17512_400,26,311480573,S+U Warschauer Str. (Berlin),,1,,3221,1,1
+17512_400,26,311480574,S+U Warschauer Str. (Berlin),,1,,3221,1,1
 17464_700,26,311477339,Waldsassener Str. (Berlin),,0,,2927,1,2
+17463_900,3,311476866,Allee der Kosmonauten/Rhinstr. (Berlin),,0,14205,2924,1,1
+17461_700,26,311475444,U Alt-Mariendorf (Berlin),,0,,2903,1,2
+17460_900,26,311475003,S Hackescher Markt (Berlin),,0,,2885,1,1
+17460_900,26,311475004,S Hackescher Markt (Berlin),,0,,2885,1,1
 17460_900,26,311474426,"Berlin, Betriebshof Marzahn",,1,,2870,1,1
 17459_900,26,311474114,U Turmstr. (Berlin),,0,,2872,1,1
 17459_900,26,311474117,U Turmstr. (Berlin),,0,,2872,1,1
 17459_900,26,311474081,U Turmstr. (Berlin),,0,,2872,1,1
+17459_900,26,311474341,U Turmstr. (Berlin),,0,,2872,1,1
 17457_700,26,311472509,Busseallee (Berlin),,1,,2836,1,2
+17456_700,26,311472232,Gutschmidtstr. (Berlin),,0,,2814,1,2
+17456_700,1,311472224,Gutschmidtstr. (Berlin),,0,,2814,1,2
+17452_900,26,311466953,S Hackescher Markt (Berlin),,0,,2749,1,1
+17452_900,26,311466370,Falkenberg (Berlin),,1,,2756,1,1
 17452_900,26,311466151,Zingster Str. (Berlin),,1,,2761,1,1
 17452_900,26,311466152,Zingster Str. (Berlin),,1,,2761,1,1
 17452_900,26,311466155,Zingster Str. (Berlin),,1,,2761,1,1
+17452_900,3,311466088,Zingster Str. (Berlin),,1,,2761,1,1
 17448_700,42,311462438,Hadlichstr. (Berlin),,1,,2706,1,2
+17446_900,26,311461117,Am Kupfergraben (Berlin),,0,,2684,1,1
 17446_900,26,311460532,Am Steinberg (Berlin),,1,,2688,1,1
+17446_900,26,311460480,Am Steinberg (Berlin),,1,,2688,1,1
 17446_900,26,311460533,Heinersdorf (Berlin),,1,,2687,1,1
 17444_900,26,311458290,Falkenberg (Berlin),,1,14186,2653,1,1
 17442_900,26,311457955,S Warschauer Str. (Berlin),,0,,2624,1,1
+17442_900,3,311458015,S Warschauer Str. (Berlin),,0,,2624,1,1
+17442_900,32,311457736,"Berlin, Virchow-Klinikum",,1,,2630,1,1
 17441_700,26,311456996,U Dahlem-Dorf (Berlin),,1,,2609,1,2
 17440_900,26,311455976,S+U Warschauer Str. (Berlin),,0,,2597,1,1
 17438_900,26,311454892,Björnsonstr. (Berlin),,0,,2570,1,1
+17438_900,3,311454851,Björnsonstr. (Berlin),,0,,2570,1,1
+17438_900,26,311454500,"Berlin, Rosenthal Nord",,1,,2578,1,1
 17437_700,26,311453989,Roederplatz (Berlin),,0,13691,2558,1,2
+17437_700,26,311453493,Meeraner Str. (Berlin),,1,13142,2561,1,2
+17435_700,3,311452840,"Berlin, Schönhauser Allee/Bornholmer Str.",,0,,2555,1,2
 17425_900,26,311451282,S Schöneweide/Sterndamm (Berlin),,0,,2532,1,2
 17425_900,26,311451076,S Schöneweide/Sterndamm (Berlin),,0,,2534,1,2
+17425_900,26,311450969,S Schöneweide/Sterndamm (Berlin),,0,,2534,1,2
+17425_900,26,311450803,S Friedrichsfelde Ost (Berlin),,1,,2536,1,2
+17424_900,26,311450357,U Turmstr. (Berlin),,0,,2523,1,2
+17424_900,26,311450358,U Turmstr. (Berlin),,0,,2523,1,2
+17424_900,26,311450110,S+U Lichtenberg Bhf/Gudrunstr. (Berlin),,1,,2528,1,2
 17422_900,26,311449495,S Grünau (Berlin),,0,,2516,1,1
+17422_900,26,311449436,Wendenschloß (Berlin),,1,,2517,1,1
 17421_900,26,311448970,S Schöneweide/Sterndamm (Berlin),,1,,2494,1,1
+17420_900,26,311448779,Krankenhaus Köpenick/Südseite (Berlin),,0,,2482,1,1
+17420_900,3,311448853,Krankenhaus Köpenick/Südseite (Berlin),,0,,2482,1,1
 17420_900,26,311448470,S Schöneweide/Sterndamm (Berlin),,1,,2484,1,1
+17420_900,26,311448530,S Schöneweide/Sterndamm (Berlin),,1,,2484,1,1
+17417_900,530,311447321,Altes Wasserwerk (Berlin),,0,,2395,1,1
 17417_900,94,311446897,Haeckelstr. (Berlin),,1,,2403,1,1
+17416_900,3,311446564,Björnsonstr. (Berlin),,0,,2386,1,1
 17416_900,26,311446689,"Berlin, Virchow-Klinikum",,0,,2384,1,1
 17415_700,3,311446258,S Kaulsdorf (Berlin),,0,,2382,1,2
+17415_700,3,311446277,S Kaulsdorf (Berlin),,0,,2382,1,2
 17402_700,26,311444523,Krankenhaus Hedwigshöhe (Berlin),,0,,2344,1,2
 17398_700,26,311500447,S Ostbahnhof (Berlin),,1,,2319,1,2
 17383_700,26,311441205,Marzahner Str. (Berlin),,0,,2259,1,2
+17381_700,272,311440705,S+U Rathaus Steglitz (Berlin),,0,,2219,1,2
+17378_700,26,311439704,Dardanellenweg (Berlin),,0,,2200,1,2
+17375_700,26,311438676,Zittauer Str. (Berlin),,0,,2183,1,2
 17374_900,26,311438439,"Berlin, Pasedagplatz",,1,10751,2180,1,1
+17374_900,26,311438402,"Berlin, Pasedagplatz",,1,10763,2180,1,1
 17364_700,26,311434029,S+U Alexanderplatz Bhf/Grunerstr. (Berlin),,0,,2091,1,2
 17362_700,26,311432986,Forsthausallee (Berlin),,0,,2057,1,2
 17359_700,26,311431107,S+U Rathaus Spandau (Berlin),,1,11251,2035,1,2
 17355_700,26,311429916,Wilhelmsruher Damm (Berlin),,1,,1998,1,2
+17352_900,26,311429189,Holteistr. (Berlin),,0,,1953,1,1
+17350_700,3,311428374,Michelangelostr. (Berlin) [Bushafen],,0,,1945,1,2
+17346_700,105,311753269,S Marzahn (Berlin),,0,,1879,1,2
+17342_700,3,311424907,Halbauer Weg (Berlin),,0,,1842,1,2
+17339_700,26,311423305,Britzer Damm/Mohriner Allee (Berlin),,0,,1787,1,2
+17335_700,26,311422236,Wünsdorfer Str./Blohmstr. (Berlin),,0,,1746,1,2
+17334_700,26,311421802,S Schönefeld (bei Berlin),,0,,1729,1,2
 17329_700,26,311418986,Kaulsdorfer Str./S Köpenick (Berlin),,1,,1665,1,2
+17326_700,3,311417995,"Schöneiche (bei Berlin), Lübecker Str. [Endstelle]",,1,,1629,1,2
 17325_700,26,311417716,Hasselwerderstr. (Berlin),,1,,1608,1,2
 17324_900,26,311417312,Ahrensfelde/Stadtgrenze (Berlin),,1,,1599,1,1
+17324_900,26,311417328,Ahrensfelde/Stadtgrenze (Berlin),,1,,1599,1,1
 17319_700,26,311415459,S Buch (Berlin),,0,,1533,1,2
+17311_700,26,311411431,Wasserwerk Spandau (Berlin),,1,,1427,1,2
 17310_700,26,311411076,Liesborner Weg (Berlin),,0,,1406,1,2
+17305_700,3,311408479,"Berlin, Alt-Heiligensee",,0,,1309,1,2
 17303_700,26,311407418,Göschenplatz/S Wittenau (Berlin),,0,11027,1279,1,2
+17302_700,26,311406723,Wilhelmsruher Damm (Berlin),,1,,1261,1,2
+17301_900,3,311406353,U Eberswalder Str./Pappelallee (Berlin),,0,,1249,1,1
+17294_700,26,311403492,Summter Str. (Berlin),,0,,1167,1,2
 17293_700,26,311402964,Grabbeallee/Pastor-Niemöller-Platz (Berlin),,1,,1149,1,2
 17290_700,26,311402157,Lübecker Str. (Berlin),,1,,1113,1,2
 13889_700,582,310787132,S Blankenfelde (TF) Bhf/Brandenburger Platz,61,0,,4301,0,0
 6622_700,582,310784848,"Jüterbog, Bahnhof",31,0,,4137,0,0
 5252_700,45,308395534,"Zehdenick, Libellenweg",79,0,,4562,1,0
+5238_700,45,308386782,"Mühlenbeck, Schule",164,1,,4460,1,0
 343_900,26,301507423,"Brandenburg an der Havel, Hauptbahnhof",,1,186,4825,1,0
 18920_700,26,310112309,S Wannsee Bhf,,1,7720,5140,1,0
+10676_700,26,309100679,"Premnitz, Oberschule",,0,,5890,1,0
+1971_700,56,309095286,"Ketzin (Havel), Am Markt",,0,,5784,1,0
 1925_700,26,309097413,"Dallgow-Döberitz, Havelpark",,0,,5584,1,0
+28572_109,652,308664741,S+U Berlin Hauptbahnhof,15633,1,,7486,1,1
 22240_109,689,308759623,S Frohnau (Berlin),85088,0,,7398,1,1
 22240_109,687,308759497,Flughafen BER,85085,1,,7407,1,1
 22240_109,687,308759496,Flughafen BER,85087,1,,7407,1,1
 22240_109,687,308759495,Flughafen BER,85089,1,,7407,1,1
+18949_109,687,308683420,S Teltow Stadt,26663,1,,7367,1,1
+18949_109,688,308683418,S Lichterfelde Ost Bhf (Berlin),26667,1,,7368,1,1
+10229_109,771,308720750,S Südkreuz Bhf (Berlin),47108,0,,7234,1,1
+10229_109,801,308720586,S Schöneweide Bhf (Berlin),47129,1,,7242,1,1
+10227_109,26,311632426,S Südkreuz Bhf (Berlin),42727,0,3853,7133,1,1
+10227_109,826,311632429,S Grünau (Berlin),4277,0,3863,7209,1,1
 10227_109,26,311632343,Ringbahn S 42,42575,0,3901,7131,1,1
 10227_109,26,311632338,Ringbahn S 42,42585,0,3902,7131,1,1
 10227_109,832,311632374,S Schöneweide Bhf (Berlin),4283,0,3906,7210,1,1
+10226_109,828,311630018,Ringbahn S 42,42213,0,3793,7131,1,1
+10226_109,863,311630014,S Beusselstr. (Berlin),42221,0,3815,7131,1,1
+10224_109,26,311626202,S Beusselstr. (Berlin),41726,0,3765,7007,1,1
+10224_109,178,311626181,S+U Hermannstr. (Berlin),41734,0,3769,7019,1,1
 10224_109,26,311626217,Ringbahn S 41,41696,0,3772,7007,1,1
 10224_109,26,311626219,Ringbahn S 41,41692,0,3773,7007,1,1
+10223_109,828,311623839,S Beusselstr. (Berlin),41210,0,3762,7007,1,1
+10170_109,921,311674987,S Spandau Bhf (Berlin),9128,0,,6926,1,1
+10170_109,921,311674986,S Spandau Bhf (Berlin),9130,0,,6926,1,1
 10170_109,26,311674643,S Spandau Bhf (Berlin),9410,0,,6924,1,1
+10167_109,179,311667418,S Blankenburg (Berlin),8138,0,,6847,1,1
 10167_109,112,311667314,S Blankenburg (Berlin),8422,0,,6861,1,1
 10167_109,112,311666861,S Wildau,8117,1,,6848,1,1
 10167_109,160,311666860,S Wildau,8119,1,,6848,1,1
+10167_109,112,311666525,S Grünau (Berlin),8137,1,,6852,1,1
+10167_109,179,311666533,S Grünau (Berlin),8139,1,,6853,1,1
 10165_109,1104,308746465,S Wartenberg (Berlin),75335,1,,6816,1,1
 10163_109,1124,308741208,S Ahrensfelde Bhf (Berlin),7587,1,,6686,1,1
+10163_109,1145,308741186,S Ahrensfelde Bhf (Berlin),7607,1,,6686,1,1
+10163_109,1146,308741185,S Ahrensfelde Bhf (Berlin),7609,1,,6686,1,1
+10162_109,1124,308737145,S Potsdam Hauptbahnhof,7138,0,,6678,1,1
+10162_109,1200,308737016,S Ahrensfelde Bhf (Berlin),7139,1,,6687,1,1
+10162_109,1202,308736992,S Ahrensfelde Bhf (Berlin),7141,1,,6694,1,1
+10162_109,1204,308736991,S Ahrensfelde Bhf (Berlin),7143,1,,6694,1,1
 10157_109,1160,308725804,S Westkreuz (Berlin),5104,0,,6516,1,1
 10157_109,1323,308725702,S Strausberg Nord,5111,1,,6528,1,1
 10155_109,1344,308714848,S Westend (Berlin),46100,0,,6462,1,1
+10155_109,1346,308714840,S Westend (Berlin),46120,0,,6462,1,1
 10155_109,1388,308714359,S Königs Wusterhausen Bhf,46097,1,,6466,1,1
+10149_109,1437,308692748,S Ostbahnhof (Berlin),3612,0,,6304,1,1
 10149_109,1104,308692369,S Erkner Bhf,3799,1,,6322,1,1
+10148_109,1500,308688811,S Spandau Bhf (Berlin),3142,0,,6293,1,1
 10148_109,1545,308688481,S Erkner Bhf,3131,1,,6313,1,1
 10145_109,1074,308679933,S Teltow Stadt,25111,1,,6280,1,1
+10145_109,1075,308679891,S Teltow Stadt,25129,1,,6279,1,1
 10144_109,3,311606006,S Lichtenrade (Berlin),2623,1,,6236,1,1
 10143_109,1634,311603068,S Blankenfelde (TF) Bhf,2085,1,,6190,1,1
+10143_109,1636,311603005,S Blankenfelde (TF) Bhf,2117,1,,6186,1,1
 10142_109,262,311591109,S Frohnau (Berlin),1606,0,,6126,1,1
 10142_109,258,311590717,S Zehlendorf (Berlin),1803,1,,6157,1,1
 10142_109,258,311590716,S Zehlendorf (Berlin),1805,1,,6157,1,1
 10141_109,262,311587799,S Wannsee Bhf (Berlin),1133,1,,6111,1,1
+10141_109,253,311587790,S Wannsee Bhf (Berlin),1151,1,,6111,1,1
+29238_700,3,311741962,"Stendal, Hauptbahnhof (Bus)",03331,0,,8390,0,0
+29238_700,3,311741891,"Nauen, Bahnhof",03332,1,,8393,0,0
+28311_100,160,311711273,"Cottbus, Hauptbahnhof",18526,0,,8380,0,1
+28311_100,160,311711268,"Cottbus, Hauptbahnhof",18528,0,,8380,0,1
 28311_100,3,311711164,S+U Berlin Hauptbahnhof,18527,1,,8383,0,1
+24056_100,26,311705974,S Potsdam Hauptbahnhof,18481,1,,8304,0,1
 24055_100,3,311705777,S Spandau Bhf (Berlin),18617,0,5205,8293,0,1
+24053_100,112,311713184,S Charlottenburg Bhf (Berlin),03736,0,,8240,0,1
 24053_100,112,311712996,"Senftenberg, Bahnhof",75827,0,,8249,0,1
+24053_100,160,311712923,"Cottbus, Hauptbahnhof",75833,0,,8251,0,1
 24053_100,112,311712166,"Bad Belzig, Bahnhof",03731,1,,8263,0,1
+24053_100,112,311712246,"Bad Belzig, Bahnhof",03737,1,,8263,0,1
 24053_100,112,311711955,S Ostkreuz Bhf (Berlin),75828,1,,8270,0,1
+24052_100,3,311707166,S Potsdam Hauptbahnhof,18133,1,,8234,0,1
 24051_100,3,311705629,S+U Berlin Hauptbahnhof,21914,0,,8224,0,1
+24051_100,3,311705387,S+U Berlin Hauptbahnhof,21918,0,,8224,0,1
+24050_100,1947,311708769,S Blankenfelde (TF) Bhf,18335,0,,8204,0,1
 24048_100,26,311704853,"Cottbus, Hauptbahnhof",18076,0,,8176,0,1
 24046_100,2068,311709415,"Ludwigsfelde, Bahnhof",18227,0,,8158,0,1
+24046_100,2068,311709070,S+U Lichtenberg Bhf (Berlin),18232,1,,8160,0,1
 24045_100,1947,311710814,"Cottbus, Hauptbahnhof",03128,0,,8084,0,1
+24045_100,160,311710758,"Cottbus, Hauptbahnhof",03134,0,,8082,0,1
 24045_100,1947,311710089,"Nauen, Bahnhof",03129,1,,8103,0,1
+24042_100,3,311703801,"Cottbus, Hauptbahnhof",18363,0,,8049,0,1
+24042_100,160,311703632,"Calau, Bahnhof",18372,1,,8054,0,1
+24025_100,3,311721394,"Jüterbog, Bahnhof",03160,0,5208,8024,0,1
 24025_100,3,311720960,S Spandau Bhf (Berlin),03179,1,5347,8032,0,1
+24025_100,3,311721018,S Spandau Bhf (Berlin),03161,1,5360,8031,0,1
 24025_100,3,311721019,S Spandau Bhf (Berlin),03159,1,5361,8031,0,1
+19715_700,160,311714762,"Calau, Bahnhof",78397,0,,7977,0,0
 19156_109,828,311693320,Schönebeck-Bad Salzelmen,39029,0,,7858,0,1
 19156_109,26,311693319,Schönebeck-Bad Salzelmen,39031,0,,7858,0,1
+19156_109,828,311693315,Schönebeck-Bad Salzelmen,39037,0,,7858,0,1
 19066_100,3,311725819,S Hennigsdorf Bhf,03629,0,,7751,0,1
+19066_100,3,311725912,S Hennigsdorf Bhf,03635,0,,7749,0,1
 19062_100,3,311723032,Bahnhof Neustadt,18293,1,,7734,0,1
+19062_100,3,311723013,Bahnhof Neustadt,18297,1,,7734,0,1
 19059_100,486,311722250,"Löwenberg (Mark), Bahnhof",92265,0,,7662,0,1
+19058_100,2431,311720218,"Jüterbog, Bahnhof",03357,0,,7522,1,1
 19058_100,3,311719652,"Schwedt, Bahnhof",03354,1,,7557,1,1
 27915_700,26,311091879,"Potsdam, Am Upstall",,1,,8693,1,0
+15277_700,53,311091982,S+U Rathaus Spandau (Berlin),,1,,8650,1,0
 15274_700,3,311091453,S Potsdam Hauptbahnhof,,0,,8608,1,0
 15274_700,3,311091406,S Potsdam Hauptbahnhof,,0,,8608,1,0
+13438_900,53,311095227,"Potsdam, Fontanestr.",,1,,8599,1,0
+13438_900,53,311095239,"Potsdam, Fontanestr.",,1,,8599,1,0
 13438_900,53,311095248,"Potsdam, Fontanestr.",,1,,8599,1,0
 7362_900,40,311094494,"Potsdam, Glienicker Brücke",,1,,8583,0,0
 7362_900,53,311094470,"Potsdam, Glienicker Brücke",,1,,8583,1,0
+7361_700,26,311092174,S Potsdam Hauptbahnhof,,1,9170,8579,1,0
 5635_900,40,311095100,"Potsdam, Marie-Juchacz-Str.",,0,,8572,1,0
 5635_900,56,311095078,"Potsdam, Marie-Juchacz-Str.",,0,,8572,1,0
+5635_900,53,311095141,"Potsdam, Marie-Juchacz-Str.",,0,,8572,1,0
 5635_900,56,311094961,"Potsdam, Campus Jungfernsee",,1,,8574,1,0
 5596_700,56,311093724,"Potsdam, Johannes-Kepler-Platz",,0,,8555,1,0
+5596_700,1,311093805,"Potsdam, Johannes-Kepler-Platz",,0,9437,8556,1,0
+5596_700,3,311093605,"Potsdam, Rehbrücke Bhf",,1,9266,8559,1,0
+1556_900,53,311094116,"Potsdam, Kirschallee",,1,,8544,1,0
+1550_700,26,311093302,S Griebnitzsee Bhf,,1,9380,8501,1,0
+1548_700,3,311093006,"Potsdam, Konrad-Wolf-Allee/Sternstr.",,0,,8453,1,0
 4257_700,26,309927551,"Werneuchen, Bahnhof",65,0,,9339,1,0
 5378_700,56,307928153,"Königs Wusterhausen, Bettina-von-Arnim-Str.",32,1,,10392,1,0
 5345_700,2580,307921000,"Burg, Bleske",33,0,,9933,1,0
@@ -158,16 +312,24 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,
 27298_700,26,311168428,"Fürstenwalde, Bahnhof",438024,1,9732,14558,1,0
 27292_700,26,311168106,"Müncheberg, Stadt",432025,0,,14476,1,0
 27292_700,26,311168060,"Fürstenwalde, Bahnhof",432024,1,,14481,1,0
+27292_700,26,311168056,"Fürstenwalde, Bahnhof",432028,1,,14481,1,0
 27282_700,26,311167426,PlusBus S Neuenhagen,420025,0,,14332,1,0
 27277_700,26,311166772,EKZ Nord,413021,0,,14286,1,0
 27276_700,4086,311166546,"Petersdorf (bei Fürstenwalde), Am Fuchsbau",412020,1,,14282,1,0
+27275_700,26,311166389,"Fürstenwalde, Platz der Solidarität",411068,1,,14268,1,0
 27265_700,4086,311166038,PlusBus Beeskow,400027,0,9651,14124,1,0
+27265_700,4086,311166008,PlusBus Eisenhüttenstadt,400030,1,9873,14125,1,0
+24715_700,4160,311583836,"Fangschleuse, Tesla Süd",3392263,0,,14116,0,0
 19103_700,56,310472245,Angermünde Bahnhof,24,1,,15202,0,0
 26793_106,3,311584658,"Joachimsthal, Bahnhof",055780,1,,16017,0,1
 26791_106,171,311584624,"Schwedt, Bahnhof",055736,1,,16016,0,1
 26790_106,3,311584610,"Letschin, Bahnhof",055703,0,,16009,0,1
 26786_106,26,311584435,"Wensickendorf, Bahnhof",061069,0,,15950,0,1
+26786_106,53,309082587,"Basdorf (BAR), Bahnhof",061075,0,,15929,0,1
 26785_106,26,311584329,S Ostkreuz Bhf (Berlin),061445,0,,15904,0,1
 26785_106,3,311584218,S+U Lichtenberg Bhf (Berlin),005176,1,,15900,0,1
+26785_106,4219,311584215,S+U Lichtenberg Bhf (Berlin),005184,1,,15900,0,1
 26785_106,26,311584256,"Müncheberg, Bahnhof",061450,1,,15891,0,1
 26784_106,26,311584131,S Ostkreuz Bhf (Berlin),061210,1,,15872,0,1
+26783_106,196,311584044,"Löwenberg (Mark), Bahnhof",061134,1,,15862,0,1
+22726_700,2602,310371254,"Neuruppin, Rheinsberger Tor Bhf",32,1,,16572,0,0

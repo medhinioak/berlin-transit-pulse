@@ -14,7 +14,7 @@ Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC-BY 4.0
 | Path | Contents |
 | --- | --- |
 | `vbb-rt/rush-hour/` | 4 consecutive trimmed snapshots, 30 s apart, recorded on Wed 2026-11-18 at 18:03–18:05 CET |
-| `vbb-rt/evening/` | 4 consecutive trimmed snapshots, 30 s apart, recorded after 21:00 CET |
+| `vbb-rt/evening/` | 4 consecutive trimmed snapshots, 30 s apart, recorded on Wed 2026-11-18 at 21:05–21:06 CET |
 | `vbb-rt/<set>/NN.pb.gz` | A valid gzipped `FeedMessage`: the original header, only the chosen trips |
 | `vbb-rt/<set>/manifest.json` | Per snapshot: feed timestamp, ETag, entity counts and sizes (full and trimmed); trim parameters; picks per category and mode; the edge-case trips by `trip_id@start_date` |
 | `gtfs-static/mini/*.txt` | Plain-CSV GTFS with exactly the rows the realtime fixtures reference: their trips, all their stop_times, those stops and their parent stations, routes, agencies, calendar and calendar_dates |
