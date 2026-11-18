@@ -38,7 +38,10 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
   `.pth` files in `.venv/lib/python3.12/site-packages/`. Python 3.12.13 skips hidden
   `.pth` files, so the `src/` paths never reach `sys.path`. The repo was under `~/Documents`,
   which iCloud Drive syncs (Desktop & Documents), and iCloud sets that flag.
-- **Fix:** keep the repo outside iCloud-synced folders (`~/Documents`, `~/Desktop`). As a guard,
-  `make install` runs `chflags -R nohidden .venv` after `uv sync` on macOS; if imports
-  break after a plain `uv sync` or `uv add`, run `make install` again.
-- **Status:** _workaround_ until the repo is moved out of `~/Documents`; then _fixed_
+- **Fix:** keep the repo outside iCloud-synced folders (`~/Documents`, `~/Desktop`). It now
+  lives in `~/Code`. After moving a clone, delete `.venv` and run `make install` again: the
+  scripts in `.venv/bin` keep the old path in their shebang, and `uv sync` doesn't rewrite them.
+  Also unset a `VIRTUAL_ENV` that still points at the old path. If an old clone has to stay in
+  iCloud, `chflags -R nohidden .venv` after each sync clears the flag.
+- **Status:** _fixed_ (repo moved to `~/Code`, 2026-11-18); the `chflags` step was removed
+  from `make install`

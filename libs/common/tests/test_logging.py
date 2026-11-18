@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from btp_common.config import BaseServiceSettings, LogLevel
 from btp_common.logging import configure_logging
 
 
@@ -20,6 +21,11 @@ def restore_root_logger() -> Iterator[None]:
     root.setLevel(level)
 
 
+def _configure(level: LogLevel = "INFO") -> None:
+    """Configure logging for a service called ingest."""
+    configure_logging(BaseServiceSettings(service_name="ingest", log_level=level))
+
+
 def _lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, str]]:
     """Parse captured stdout as JSON lines."""
     return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
@@ -27,7 +33,7 @@ def _lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, str]]:
 
 def test_writes_one_json_object_per_line(capsys: pytest.CaptureFixture[str]) -> None:
     """A log call becomes one JSON line with message, service, level and logger."""
-    configure_logging("ingest", "INFO")
+    _configure("INFO")
     logging.getLogger("btp.test").info("hello %s", "world")
     [entry] = _lines(capsys)
     assert entry["message"] == "hello world"
@@ -38,23 +44,29 @@ def test_writes_one_json_object_per_line(capsys: pytest.CaptureFixture[str]) -> 
 
 def test_timestamp_is_utc(capsys: pytest.CaptureFixture[str]) -> None:
     """Timestamps carry a zero UTC offset."""
-    configure_logging("ingest")
+    _configure()
     logging.getLogger().warning("x")
     [entry] = _lines(capsys)
     assert datetime.fromisoformat(entry["ts"]).utcoffset() == timedelta(0)
 
 
-def test_level_filter_applies(capsys: pytest.CaptureFixture[str]) -> None:
-    """Records below the configured level are dropped."""
-    configure_logging("ingest", "warning")
+def test_service_and_level_come_from_env(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """BTP_SERVICE_NAME and BTP_LOG_LEVEL set the service field and drop lower records."""
+    monkeypatch.setenv("BTP_SERVICE_NAME", "processor")
+    monkeypatch.setenv("BTP_LOG_LEVEL", " warning ")
+    configure_logging(BaseServiceSettings())
     logging.getLogger().info("dropped")
     logging.getLogger().warning("kept")
-    assert [e["message"] for e in _lines(capsys)] == ["kept"]
+    entries = _lines(capsys)
+    assert [e["message"] for e in entries] == ["kept"]
+    assert entries[0]["service"] == "processor"
 
 
 def test_exception_is_serialised(capsys: pytest.CaptureFixture[str]) -> None:
     """The traceback goes into exc_info."""
-    configure_logging("ingest")
+    _configure()
     try:
         raise ValueError("boom")
     except ValueError:
@@ -65,7 +77,7 @@ def test_exception_is_serialised(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_reconfiguring_does_not_duplicate_lines(capsys: pytest.CaptureFixture[str]) -> None:
     """Calling configure_logging twice keeps one handler."""
-    configure_logging("ingest")
-    configure_logging("ingest")
+    _configure()
+    _configure()
     logging.getLogger().warning("once")
     assert len(_lines(capsys)) == 1

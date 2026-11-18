@@ -19,7 +19,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Stop / follow logs: make down / make logs (stub, #3)
 - Tests: make test (unit, with coverage; one test:
   uv run pytest services/ingest/tests/test_smoke.py::test_package_imports)
-- Integration tests: make test-integration (needs make up)
+- Integration tests: make test-integration (needs make up; passes with no tests collected
+  until #3 adds them)
 - Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy strict, per package)
 - Pre-commit hooks: uv run pre-commit run --all-files
 - Record new feed fixtures: make fixtures (polite to the feed; see Rules) (stub, #4)

@@ -5,6 +5,8 @@ import logging
 import sys
 from datetime import UTC, datetime
 
+from btp_common.config import BaseServiceSettings
+
 
 class JsonFormatter(logging.Formatter):
     """Format log records as single-line JSON with a UTC timestamp and the service name."""
@@ -28,11 +30,14 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(entry, ensure_ascii=False)
 
 
-def configure_logging(service_name: str, level: str = "INFO") -> None:
-    """Send all logging through one stdout handler that writes JSON lines."""
+def configure_logging(settings: BaseServiceSettings) -> None:
+    """Send all logging through one stdout handler that writes JSON lines.
+
+    Service name and level come from the settings, i.e. BTP_SERVICE_NAME and BTP_LOG_LEVEL.
+    """
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter(service_name))
+    handler.setFormatter(JsonFormatter(settings.service_name))
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
-    root.setLevel(level.upper())
+    root.setLevel(settings.log_level)

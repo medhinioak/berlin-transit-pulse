@@ -3,28 +3,27 @@
 
 # Each package is type-checked on its own: every package has a tests/test_smoke.py,
 # and mypy rejects two modules with the same name in one run.
-PACKAGES := $(wildcard services/* libs/*)
+# A package is a folder with a pyproject.toml, so stray files in services/ or libs/ don't count.
+PACKAGES := $(patsubst %/,%,$(dir $(wildcard services/*/pyproject.toml libs/*/pyproject.toml)))
 
 help: ## List targets
 	@grep -E '^[a-zA-Z0-9_. -]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 install: ## Install all workspace packages and dev tools
 	uv sync --all-packages
-	@# macOS can flag files in .venv as hidden; Python >= 3.12.13 then skips the editable
-	@# .pth files and the btp_* packages don't import. See docs/troubleshooting.md.
-	@if [ "$$(uname)" = "Darwin" ]; then chflags -R nohidden .venv; fi
 
 test: ## Unit tests with coverage
 	uv run pytest --cov
 
+# pytest exits 5 when no test is collected; until #3 adds integration tests that is not a failure.
 test-integration: ## Integration tests (needs `make up`)
-	uv run pytest -m integration
+	uv run pytest -m integration; status=$$?; [ $$status -eq 0 ] || [ $$status -eq 5 ]
 
 lint: ## Ruff lint and format check
 	uv run ruff check . && uv run ruff format --check .
 
 fmt: ## Format and auto-fix with ruff
-	uv run ruff format . && uv run ruff check --fix .
+	uv run ruff check --fix . && uv run ruff format .
 
 typecheck: ## mypy (strict) on every package
 	@set -e; for p in $(PACKAGES); do echo "mypy $$p"; uv run mypy $$p/src $$p/tests; done
