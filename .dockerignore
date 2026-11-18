@@ -1,0 +1,18 @@
+# Build context is the repo root; send only what the service images need.
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage*
+htmlcov
+.env
+**/.env
+fixtures
+deploy
+docs
+web
+alt
+scripts

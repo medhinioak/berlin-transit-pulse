@@ -8,6 +8,8 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "pre-commit>=4.0",
+    "confluent-kafka>=2.16.2",
+    "psycopg[binary]>=3.3.9",
 ]
 
 [tool.ruff]
@@ -26,6 +28,11 @@ convention = "google"
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+
+# confluent_kafka.admin re-exports AdminClient, ConfigResource etc. without an __all__.
+[[tool.mypy.overrides]]
+module = "confluent_kafka.admin"
+implicit_reexport = true
 
 [tool.pytest.ini_options]
 testpaths = ["services", "libs"]
