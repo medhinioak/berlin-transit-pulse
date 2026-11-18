@@ -10,15 +10,21 @@ Tasks: GitHub Issues, one milestone per release (M1–M5, Alternatives, After la
 
 # Commands
 
-Set up by the M1 scaffolding issue. Keep this list true to the Makefile.
+Keep this list true to the Makefile (`make help` lists every target).
+Targets marked (stub) print the issue that implements them and exit non-zero.
 
-- Install: uv sync
-- Start the stack locally: make up (Kafka, Postgres, all services; replays fixtures when FEED_MODE=fixtures)
-- Stop: make down
-- Tests: make test (one test: uv run pytest services/ingest/tests/test_diff.py::test_name)
-- Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy)
-- Record new feed fixtures: make fixtures (polite to the feed; see Rules)
-- Terraform: make tf-plan STACK=release (fmt, validate, plan). Never apply from here.
+- Install: make install (uv sync --all-packages)
+- Start the stack locally: make up (Kafka, Postgres, all services; replays fixtures when
+  BTP_FEED_MODE=fixtures) (stub, #3)
+- Stop / follow logs: make down / make logs (stub, #3)
+- Tests: make test (unit, with coverage; one test:
+  uv run pytest services/ingest/tests/test_smoke.py::test_package_imports)
+- Integration tests: make test-integration (needs make up; passes with no tests collected
+  until #3 adds them)
+- Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy strict, per package)
+- Pre-commit hooks: uv run pre-commit run --all-files
+- Record new feed fixtures: make fixtures (polite to the feed; see Rules) (stub, #4)
+- Terraform: make tf-plan STACK=release (fmt, validate, plan). Never apply from here. (stub, #13)
 - GitHub: use the gh CLI for issues, PRs and CI
   (gh issue view N, gh pr checks, gh run view --log-failed)
 

@@ -1,0 +1,13 @@
+[project]
+name = "btp-metrics-api"
+version = "0.1.0"
+description = "Metrics API: read-only HTTP API over the reliability marts."
+requires-python = ">=3.12"
+dependencies = ["btp-common"]
+
+[tool.uv.sources]
+btp-common = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
