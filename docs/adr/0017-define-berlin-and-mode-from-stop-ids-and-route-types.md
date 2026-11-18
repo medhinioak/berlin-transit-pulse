@@ -1,6 +1,6 @@
 # ADR-0017: Define "in Berlin" by DHID state code and mode by route type
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Decider: Medhini
 - Review: rule set in issue #5, verified against the real feed in the same issue, 2026-11-18

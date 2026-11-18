@@ -1,6 +1,6 @@
 # ADR-0009: Version the static GTFS and swap versions atomically
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 - Decider: Medhini
 - Review: decisions taken in issue #5; implementation reviewed with Claude Code `/code-review`,

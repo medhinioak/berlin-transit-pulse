@@ -6,8 +6,8 @@ Start from [`0000-template.md`](0000-template.md).
 
 | ADR | Decision | Status |
 | --- | --- | --- |
-| [0009](0009-version-static-gtfs-and-swap-atomically.md) | Version the static GTFS and swap versions atomically | Proposed |
-| [0017](0017-define-berlin-and-mode-from-stop-ids-and-route-types.md) | Define "in Berlin" by DHID state code and mode by route type | Proposed |
+| [0009](0009-version-static-gtfs-and-swap-atomically.md) | Version the static GTFS and swap versions atomically | Accepted |
+| [0017](0017-define-berlin-and-mode-from-stop-ids-and-route-types.md) | Define "in Berlin" by DHID state code and mode by route type | Accepted |
 
 Planned ADRs, in the order they are expected (from the plan):
 
