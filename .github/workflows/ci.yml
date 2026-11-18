@@ -1,0 +1,108 @@
+# Lint, type check, unit tests and image builds. Each job calls the Makefile target, so CI and
+# local runs stay identical. No secrets, and no calls to the VBB feed: tests use fixtures/.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Use uv.lock exactly; `uv run` must not re-resolve.
+  UV_FROZEN: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - run: make lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - run: make typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - run: make test
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+
+  # Every service with a Dockerfile is built; a new service is picked up without editing CI.
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      services: ${{ steps.list.outputs.services }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        run: |
+          services=$(ls services/*/Dockerfile | cut -d/ -f2 | jq -Rnc '[inputs]')
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          echo "Services with a Dockerfile: $services"
+
+  image:
+    needs: discover
+    if: ${{ needs.discover.outputs.services != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.discover.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v7
+      # amd64 only for now; arm64 images for the t4g.small come with M2.
+      - run: docker build -f "services/${{ matrix.service }}/Dockerfile" -t "btp-${{ matrix.service }}:ci" .
+      - run: docker run --rm "btp-${{ matrix.service }}:ci"
+
+  # One stable check name for the ruleset, whatever services the matrix holds.
+  docker:
+    needs: image
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All image builds passed
+        run: |
+          echo "image builds: ${{ needs.image.result }}"
+          test "${{ needs.image.result }}" = "success"
