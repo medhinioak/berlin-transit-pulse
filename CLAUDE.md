@@ -17,12 +17,15 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Start the stack locally: make up (Kafka, Postgres, all services; waits until healthy;
   replays fixtures when BTP_FEED_MODE=fixtures). Stop / follow logs: make down / make logs
 - Inspect the stack: make ps, make kafka-topics, make psql (details: deploy/compose/README.md)
+- Schedule versions: uv run btp-schedule status | import [--file PATH] [--activate] | activate ID
+  (services/schedule/README.md)
 - Tests: make test (unit, with coverage; one test:
   uv run pytest services/ingest/tests/test_smoke.py::test_package_imports)
 - Integration tests: make test-integration (needs make up)
 - Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy strict, per package)
 - Pre-commit hooks: uv run pre-commit run --all-files
-- Record new feed fixtures: make fixtures (polite to the feed; see Rules) (stub, #4)
+- Record new feed fixtures: make fixtures LABEL=rush-hour|evening (calls the live feed, needs
+  BTP_FEED_CONTACT; see fixtures/README.md and Rules)
 - Terraform: make tf-plan STACK=release (fmt, validate, plan). Never apply from here. (stub, #13)
 - GitHub: use the gh CLI for issues, PRs and CI
   (gh issue view N, gh pr checks, gh run view --log-failed)
@@ -118,5 +121,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
   a snapshot are meaningless; count only trips that are running or have run.
 - Annual timetable change on 2026-12-13: the static GTFS version changes and trip IDs
   with it.
+- Consumers read the schedule only through the schedule.v_* views (active version, ADR-0009);
+  the tables hold every version and trip_ids change between them. A Berlin trip has any stop
+  with a de:11000: stop_id (ADR-0017).
 - The release server is a t4g.small (arm64, 2 GB RAM): build arm64 images, keep Kafka's
   heap at about 384–512 MB, and check memory after adding anything to compose.

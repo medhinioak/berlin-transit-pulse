@@ -1,0 +1,154 @@
+{
+  "label": "evening",
+  "source": "https://production.gtfsrt.vbb.de/data",
+  "licence": "Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC-BY 4.0",
+  "trim": {
+    "seed": "btp",
+    "per_mode": {
+      "running": 25,
+      "future": 3
+    },
+    "edge_cases": {
+      "cancelled": 8,
+      "starts": 6,
+      "ends": 6,
+      "appears": 6,
+      "disappears": 6
+    }
+  },
+  "trips": 172,
+  "counts": {
+    "appears": {
+      "bus": 5,
+      "tram": 1
+    },
+    "cancelled": {
+      "regional": 2,
+      "sbahn": 5,
+      "tram": 1
+    },
+    "disappears": {
+      "bus": 4,
+      "tram": 2
+    },
+    "ends": {
+      "bus": 4,
+      "tram": 1,
+      "ubahn": 1
+    },
+    "future": {
+      "bus": 3,
+      "regional": 3,
+      "sbahn": 3,
+      "tram": 3,
+      "ubahn": 3
+    },
+    "running": {
+      "bus": 25,
+      "regional": 25,
+      "sbahn": 25,
+      "tram": 25,
+      "ubahn": 25
+    },
+    "starts": {
+      "bus": 3,
+      "sbahn": 1,
+      "tram": 1,
+      "ubahn": 1
+    }
+  },
+  "edge_case_trips": {
+    "cancelled": [
+      "307793781@20261118",
+      "308683418@20261118",
+      "308683420@20261118",
+      "308720586@20261118",
+      "311094116@20261118",
+      "311584624@20261118",
+      "311626181@20261118",
+      "311632374@20261118"
+    ],
+    "starts": [
+      "308386782@20261118",
+      "309100679@20261118",
+      "310005922@20261118",
+      "311422236@20261118",
+      "311450803@20261118",
+      "311666533@20261118"
+    ],
+    "ends": [
+      "310000915@20261118",
+      "310371254@20261118",
+      "311439704@20261118",
+      "311443439@20261118",
+      "311448530@20261118",
+      "311753269@20261118"
+    ],
+    "appears": [
+      "311166008@20261119",
+      "311406723@20261118",
+      "311421802@20261118",
+      "311450969@20261118",
+      "311452840@20261118",
+      "311492262@20261118"
+    ],
+    "disappears": [
+      "311168056@20261118",
+      "311423305@20261118",
+      "311438402@20261118",
+      "311453493@20261118",
+      "311454500@20261118",
+      "311487938@20261118"
+    ]
+  },
+  "snapshots": [
+    {
+      "file": "01.pb.gz",
+      "source": "20261118T200512Z.pb.gz",
+      "feed_timestamp": 1795032294,
+      "fetched_at": "2026-11-18T20:05:12.727961+00:00",
+      "etag": "\"18e59f-cwNew8j46SUK1mJc6dR7ylanJoo\"",
+      "entities_full": 7887,
+      "entities": 166,
+      "bytes_full_gz": 1631647,
+      "bytes_gz": 38863,
+      "bytes_raw": 188255
+    },
+    {
+      "file": "02.pb.gz",
+      "source": "20261118T200542Z.pb.gz",
+      "feed_timestamp": 1795032314,
+      "fetched_at": "2026-11-18T20:05:42.815790+00:00",
+      "etag": "\"18d635-9izMTfqn7TRpgKqHKNORrrIjULQ\"",
+      "entities_full": 7871,
+      "entities": 167,
+      "bytes_full_gz": 1627701,
+      "bytes_gz": 39890,
+      "bytes_raw": 192437
+    },
+    {
+      "file": "03.pb.gz",
+      "source": "20261118T200612Z.pb.gz",
+      "feed_timestamp": 1795032343,
+      "fetched_at": "2026-11-18T20:06:12.599411+00:00",
+      "etag": "\"18d6ec-Xhr7eadtJV26IfHIwDvHTYeQojQ\"",
+      "entities_full": 7871,
+      "entities": 167,
+      "bytes_full_gz": 1627884,
+      "bytes_gz": 39900,
+      "bytes_raw": 192437
+    },
+    {
+      "file": "04.pb.gz",
+      "source": "20261118T200642Z.pb.gz",
+      "feed_timestamp": 1795032374,
+      "fetched_at": "2026-11-18T20:06:42.575664+00:00",
+      "etag": "\"18c61d-T0MHzCCM9anbps8l4F1RgN9Jrm0\"",
+      "entities_full": 7865,
+      "entities": 166,
+      "bytes_full_gz": 1623581,
+      "bytes_gz": 39861,
+      "bytes_raw": 191913
+    }
+  ]
+}

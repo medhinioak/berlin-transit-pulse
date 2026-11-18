@@ -10,6 +10,7 @@ dev = [
     "pre-commit>=4.0",
     "confluent-kafka>=2.16.2",
     "psycopg[binary]>=3.3.9",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
@@ -28,6 +29,7 @@ convention = "google"
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+mypy_path = "scripts"
 
 # confluent_kafka.admin re-exports AdminClient, ConfigResource etc. without an __all__.
 [[tool.mypy.overrides]]
@@ -35,7 +37,9 @@ module = "confluent_kafka.admin"
 implicit_reexport = true
 
 [tool.pytest.ini_options]
-testpaths = ["services", "libs"]
+testpaths = ["services", "libs", "scripts"]
+# scripts/ holds standalone tools (no package); their tests import them by module name.
+pythonpath = ["scripts"]
 # importlib mode: every package has its own tests/test_smoke.py.
 addopts = "-m 'not integration' --import-mode=importlib"
 markers = [
@@ -44,5 +48,5 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["services", "libs"]
+source = ["services", "libs", "scripts"]
 omit = ["*/tests/*"]
