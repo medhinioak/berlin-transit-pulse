@@ -36,8 +36,9 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
   `uv run python -c "import btp_common"` fails with `ModuleNotFoundError`.
 - **Cause:** macOS had set the `hidden` file flag (`ls -lO`) on most of the editable
   `.pth` files in `.venv/lib/python3.12/site-packages/`. Python 3.12.13 skips hidden
-  `.pth` files, so the `src/` paths never reach `sys.path`. What sets the flag wasn't
-  pinned down; `.venv` itself was flagged too.
-- **Fix:** `make install` runs `chflags -R nohidden .venv` after `uv sync` on macOS.
-  If imports break after a plain `uv sync` or `uv add`, run `make install` again.
-- **Status:** _workaround_
+  `.pth` files, so the `src/` paths never reach `sys.path`. The repo was under `~/Documents`,
+  which iCloud Drive syncs (Desktop & Documents), and iCloud sets that flag.
+- **Fix:** keep the repo outside iCloud-synced folders (`~/Documents`, `~/Desktop`). As a guard,
+  `make install` runs `chflags -R nohidden .venv` after `uv sync` on macOS; if imports
+  break after a plain `uv sync` or `uv add`, run `make install` again.
+- **Status:** _workaround_ until the repo is moved out of `~/Documents`; then _fixed_

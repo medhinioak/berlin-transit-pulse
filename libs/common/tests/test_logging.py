@@ -12,6 +12,7 @@ from btp_common.logging import configure_logging
 
 @pytest.fixture(autouse=True)
 def restore_root_logger() -> Iterator[None]:
+    """Undo configure_logging after each test."""
     root = logging.getLogger()
     handlers, level = root.handlers[:], root.level
     yield
@@ -20,10 +21,12 @@ def restore_root_logger() -> Iterator[None]:
 
 
 def _lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, str]]:
+    """Parse captured stdout as JSON lines."""
     return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
 
 
 def test_writes_one_json_object_per_line(capsys: pytest.CaptureFixture[str]) -> None:
+    """A log call becomes one JSON line with message, service, level and logger."""
     configure_logging("ingest", "INFO")
     logging.getLogger("btp.test").info("hello %s", "world")
     [entry] = _lines(capsys)
@@ -34,6 +37,7 @@ def test_writes_one_json_object_per_line(capsys: pytest.CaptureFixture[str]) -> 
 
 
 def test_timestamp_is_utc(capsys: pytest.CaptureFixture[str]) -> None:
+    """Timestamps carry a zero UTC offset."""
     configure_logging("ingest")
     logging.getLogger().warning("x")
     [entry] = _lines(capsys)
@@ -41,6 +45,7 @@ def test_timestamp_is_utc(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_level_filter_applies(capsys: pytest.CaptureFixture[str]) -> None:
+    """Records below the configured level are dropped."""
     configure_logging("ingest", "warning")
     logging.getLogger().info("dropped")
     logging.getLogger().warning("kept")
@@ -48,6 +53,7 @@ def test_level_filter_applies(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_exception_is_serialised(capsys: pytest.CaptureFixture[str]) -> None:
+    """The traceback goes into exc_info."""
     configure_logging("ingest")
     try:
         raise ValueError("boom")
@@ -58,6 +64,7 @@ def test_exception_is_serialised(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_reconfiguring_does_not_duplicate_lines(capsys: pytest.CaptureFixture[str]) -> None:
+    """Calling configure_logging twice keeps one handler."""
     configure_logging("ingest")
     configure_logging("ingest")
     logging.getLogger().warning("once")

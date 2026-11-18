@@ -9,7 +9,8 @@ Live reliability metrics for Berlin public transport, built from VBB’s open re
 3. `uv run pre-commit install` runs ruff and the file checks on every commit.
 4. `make test` runs the unit tests. `make lint` and `make typecheck` run ruff and mypy.
 
-`make help` lists all targets. Services live in `services/`, shared code in `libs/common`.
+On macOS, keep the clone outside iCloud-synced folders such as `~/Documents`
+(see `docs/troubleshooting.md`). `make help` lists all targets. Services live in `services/`, shared code in `libs/common`.
 
 ## Data
 

@@ -6,7 +6,7 @@
 PACKAGES := $(wildcard services/* libs/*)
 
 help: ## List targets
-	@grep -E '^[a-z -]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_. -]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 install: ## Install all workspace packages and dev tools
 	uv sync --all-packages

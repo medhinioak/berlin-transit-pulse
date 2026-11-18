@@ -13,19 +13,14 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Lets isort treat every workspace package as first-party.
+src = ["services/*/src", "libs/*/src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "D"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
-[tool.ruff.lint.per-file-ignores]
-# Test names say what they check; module docstrings are still required.
-"**/tests/**" = ["D101", "D102", "D103", "D105", "D106", "D107"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["btp_common", "btp_ingest", "btp_processor", "btp_schedule", "btp_metrics_jobs", "btp_metrics_api"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -4,4 +4,5 @@ import btp_ingest
 
 
 def test_package_imports() -> None:
+    """The package imports and has a docstring."""
     assert btp_ingest.__doc__
