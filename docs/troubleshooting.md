@@ -15,9 +15,16 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
   with no restoration estimate. A first check (2026-11-18, 11:37) showed live delays for
   bus, tram and U-Bahn, but only 9% of S-Bahn trips with a non-zero delay.
 - **Cause:** upstream data source problems, per VBB. Which parts are missing isn't stated.
-- **Fix:** none yet. S-Bahn coverage is being checked at rush hour (issue: "Decide S-Bahn scope").
-  Coverage per mode will be tracked by the data-quality checks.
-- **Status:** _open_
+  The low S-Bahn share turned out to be a counting artefact, not missing data: the feed lists
+  most of the day's S-Bahn trips in advance (~2,945 future trips at 17:25, against 36 for
+  U-Bahn), and future trips carry no delay yet. Counting only running trips at rush hour
+  (2026-11-18, ~17:25) gave, for S-Bahn: 155 running, 38–39% with a non-zero delay,
+  p95 6 min, max 14 min. Live data is present for every mode.
+- **Fix:** S-Bahn kept in v1 scope (issue #1). Lesson for every metric: count only trips that
+  have actually run, never shares across the whole feed. Coverage per mode will be tracked by
+  the data-quality checks (M3), which will show whether anything is still missing.
+- **Status:** _workaround_ (what VBB still lacks is unknown; watch coverage per mode and
+  the VBB news feed)
 
 ### Rate limit reduced to 7 requests per minute
 
