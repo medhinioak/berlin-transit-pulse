@@ -14,6 +14,7 @@ lives in the repository: issues, ADRs, this file and the troubleshooting log.
 | Ideas not in the plan | [`parking-lot.md`](parking-lot.md) |
 | Problems hit, their causes and fixes (feed, infra, tooling) | [`troubleshooting.md`](troubleshooting.md) |
 | How to deploy, roll back, restore and shut down | `runbook.md`, created with the M2 release stack |
+| AWS account setup, region and sign-in | [`aws-account.md`](aws-account.md) |
 | Instructions for Claude Code | [`../CLAUDE.md`](../CLAUDE.md) |
 | Releases | Git tags and GitHub Releases: v0.1 (M1) … v1.0 (M5) |
 
