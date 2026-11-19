@@ -50,11 +50,22 @@ def shape_now_by_mode(
     return NowByModeResponse(as_of=as_of, modes=modes)
 
 
+# A feed header slightly ahead of our clock is normal; much further is bad data or test rows.
+MAX_FUTURE_S = 60
+
+
 def check_health(latest_feed_ts: datetime | None, now: datetime, max_age_s: int) -> Health:
-    """Return ok if the newest feed time is younger than max_age_s, else the reason."""
+    """Return ok if the newest feed time is younger than max_age_s and not in the future."""
     if latest_feed_ts is None:
         return Health(status="unavailable", reason="no feed data in the database")
     age = (now - latest_feed_ts).total_seconds()
+    if age < -MAX_FUTURE_S:
+        return Health(
+            status="unavailable",
+            reason=f"feed data is {-age:.0f} s in the future",
+            latest_feed_ts=latest_feed_ts,
+            feed_age_s=age,
+        )
     if age >= max_age_s:
         return Health(
             status="unavailable",

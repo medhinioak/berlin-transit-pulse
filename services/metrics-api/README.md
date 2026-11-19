@@ -29,7 +29,7 @@ database is down; `/health` then answers 503 and the data endpoint 503.
 | `BTP_FEED_MAX_AGE_S` | `300` | `/health` fails when the newest feed time is this old |
 | `BTP_FEED_MODE` | `live` (compose: `fixtures`, like ingest) | `fixtures` pins "now" to the recording time |
 | `BTP_FIXTURE_SET` | `rush-hour` | the set ingest replays; its last snapshot's time becomes "now" |
-| `BTP_AS_OF` | unset | pins "now" explicitly (ISO 8601); overrides the fixture time |
+| `BTP_AS_OF` | unset | pins "now" explicitly (ISO 8601 with an offset, e.g. `2026-11-18T17:04:51Z`; a time without one is refused); overrides the fixture time |
 | `BTP_FIXTURES_DIR` | `fixtures/` in the checkout (`/fixtures` in compose) | where the fixture sets are |
 
 ### Reference time
@@ -47,7 +47,7 @@ returned as `as_of`.
 
 200 when the database answers and `marts.v_feed_status.latest_feed_ts` is less than 5 minutes
 old, else 503 with the reason (`database unavailable: …`, `no feed data in the database`,
-`feed data is N s old (limit 300 s)`).
+`feed data is N s old (limit 300 s)`, `feed data is N s in the future` when it is more than 60 s ahead of the API clock).
 
 ```json
 {"status": "ok", "reason": null, "latest_feed_ts": "2026-11-19T10:08:19Z", "feed_age_s": 3.5}

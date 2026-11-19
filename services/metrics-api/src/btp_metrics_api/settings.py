@@ -1,14 +1,12 @@
 """Settings for metrics-api, read from BTP_* environment variables."""
 
-import gzip
 from datetime import UTC, datetime
 from typing import Literal
 
-from google.transit.gtfs_realtime_pb2 import FeedMessage
-from pydantic import Field, field_validator
+from pydantic import AwareDatetime, Field, field_validator
 
 from btp_common.config import BaseServiceSettings
-from btp_common.fixtures import rt_fixture_paths
+from btp_common.fixtures import load_rt_fixture
 
 
 class ApiSettings(BaseServiceSettings):
@@ -27,7 +25,8 @@ class ApiSettings(BaseServiceSettings):
     feed_max_age_s: int = Field(default=300, gt=0)
     # Reference time for the "now" views (ADR-0018). Unset in live mode: the views use now().
     # In fixtures mode it defaults to the header time of the replayed set's last snapshot.
-    as_of: datetime | None = None
+    # Must carry an offset (e.g. ...Z): a naive time would be read in the session time zone.
+    as_of: AwareDatetime | None = None
     feed_mode: Literal["live", "fixtures"] = "live"
     fixture_set: str = "rush-hour"
 
@@ -40,9 +39,7 @@ class ApiSettings(BaseServiceSettings):
 
 def fixture_as_of(label: str) -> datetime:
     """Return the header time of the last snapshot of a fixture set: when it was recorded."""
-    feed = FeedMessage()
-    feed.ParseFromString(gzip.decompress(rt_fixture_paths(label)[-1].read_bytes()))
-    return datetime.fromtimestamp(feed.header.timestamp, tz=UTC)
+    return datetime.fromtimestamp(load_rt_fixture(label)[-1].header.timestamp, tz=UTC)
 
 
 def reference_time(settings: ApiSettings) -> datetime | None:

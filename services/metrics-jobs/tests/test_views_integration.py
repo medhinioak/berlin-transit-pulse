@@ -24,7 +24,8 @@ Connection = psycopg.Connection[Any]
 
 D = date(2030, 1, 16)  # "today" in Europe/Berlin
 REF = datetime(2030, 1, 15, 23, 30, tzinfo=UTC)  # 00:30 in Berlin on D (CET, UTC+1)
-FEED_TS = datetime(2030, 1, 15, 23, 29, tzinfo=UTC)
+# In the past, so rows left behind by an interrupted run can't make /health look fresh.
+FEED_TS = datetime(2020, 1, 1, tzinfo=UTC)
 
 
 def at(minutes: int) -> datetime:

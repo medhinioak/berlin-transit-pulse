@@ -93,6 +93,18 @@ def test_health_unavailable_exactly_at_the_limit() -> None:
     assert check_health(NOW - timedelta(seconds=300), NOW, 300).status == "unavailable"
 
 
+def test_health_tolerates_small_clock_skew() -> None:
+    """A feed header a few seconds ahead of our clock is fine."""
+    assert check_health(NOW + timedelta(seconds=10), NOW, 300).status == "ok"
+
+
+def test_health_unavailable_with_future_feed_time() -> None:
+    """A feed time far in the future (bad header, leftover test rows) is not fresh data."""
+    health = check_health(NOW + timedelta(days=1), NOW, 300)
+    assert health.status == "unavailable"
+    assert health.reason == "feed data is 86400 s in the future"
+
+
 def test_health_unavailable_without_data() -> None:
     """An empty events table (before the first message) is unhealthy."""
     health = check_health(None, NOW, 300)

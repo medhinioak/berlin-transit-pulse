@@ -87,6 +87,23 @@ Time grows with the number of open trips, not the size of the table. The first q
 a Postgres restart pays for an empty cache; the 500 ms target (#9) holds once warm. Without retention
 (M3), `trip_state` and `latest_feed_ts`'s `max(feed_ts)` scan grow by ~80k rows a day.
 
+## Known limitations
+
+- **Timetable change night** (2026-12-13): the view finds a trip's mode and Berlin flag only in
+  the active schedule version. Trips of the previous service day still running after
+  midnight keep their old trip_ids, so after the new version is activated they drop out
+  until they finish. Handling version swaps is for M3, with the weekly refresh (#24).
+- **Fixtures against the live timetable**: `make up` replays fixture trips from 2026-11-18,
+  but `schedule-import` imports the live static GTFS by default (`BTP_FEED_MODE` defaults to
+  `live` there, to `fixtures` in ingest and metrics-api). It works while the live GTFS still
+  contains those trip_ids. After the timetable change on 2026-12-13 it no longer will, and the
+  fixtures-mode endpoint and its integration test come back empty. Running everything with
+  `BTP_FEED_MODE=fixtures` (the mini GTFS matches the fixtures) avoids it.
+- **No retention yet** (M3): `max(feed_ts)` in `v_feed_status` and the `service_date` filter
+  on `trip_state` are sequential scans. They take ~20 ms at ~80k rows (one day) and grow with
+  every day kept. Retention or an index on `trip_state` (processor schema) comes before it
+  matters.
+
 ## Tests
 
 ```sh

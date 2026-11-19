@@ -104,5 +104,4 @@ SELECT
     f.computed_at
 FROM by_mode m
 FULL JOIN cancelled c USING (mode)
-CROSS JOIN marts.v_feed_status f
-ORDER BY mode;
+CROSS JOIN marts.v_feed_status f;
