@@ -86,13 +86,14 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 ## Infrastructure, cost and secrets
 
 - All AWS resources come from Terraform in deploy/terraform/. No console changes except
-  the account baseline (MFA, Identity Center, budgets).
+  the account baseline (MFA, admin IAM user, budgets; docs/aws-account.md).
 - Claude Code never runs terraform apply or terraform destroy. Medhini applies after
   reading the plan; the plan output goes in the PR.
 - Tag every resource Project=berlin-transit-pulse and Stack=release|poc.
 - Budget: release under €20/month. A change that adds monthly cost states the estimated
   € delta in the PR. Release stack: no NAT gateway, no load balancer, no managed Kafka.
-- No secrets in the repo. AWS access is SSO locally and OIDC in GitHub Actions.
+- No secrets in the repo. AWS access is `aws login` short-term credentials locally (IAM user,
+  no access keys, profile btp, region eu-north-1) and OIDC in GitHub Actions.
   Never read .env files, *.tfvars or ~/.aws.
 
 ## Web UI
