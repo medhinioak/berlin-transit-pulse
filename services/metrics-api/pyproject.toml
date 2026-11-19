@@ -3,7 +3,16 @@ name = "btp-metrics-api"
 version = "0.1.0"
 description = "Metrics API: read-only HTTP API over the reliability marts."
 requires-python = ">=3.12"
-dependencies = ["btp-common"]
+dependencies = [
+    "btp-common",
+    "fastapi>=0.165.0",
+    "psycopg-pool>=3.3.3",
+    "psycopg[binary]>=3.3.9",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+btp-metrics-api = "btp_metrics_api.server:main"
 
 [tool.uv.sources]
 btp-common = { workspace = true }

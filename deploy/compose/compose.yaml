@@ -165,8 +165,72 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
-  # Services are added here by their issues (metrics-api #9, web #10). Pattern: like ingest
-  # above; services that read the schedule views also wait for
+  # One-shot: creates or replaces the marts views (services/metrics-jobs/sql/views/) as
+  # btp_metrics_jobs, then exits 0. Waits up to 60 s for the processor to create events.*.
+  metrics-jobs-apply:
+    build:
+      context: ../..
+      dockerfile: services/metrics-jobs/Dockerfile
+    command: ["btp-metrics-jobs", "apply-sql"]
+    environment:
+      BTP_SERVICE_NAME: metrics-jobs
+      BTP_PG_HOST: postgres
+      BTP_PG_METRICS_JOBS_PASSWORD: ${BTP_PG_METRICS_JOBS_PASSWORD:-dev_metrics_jobs}
+    depends_on:
+      schedule-import:
+        condition: service_completed_successfully
+      stop-event-processor:
+        condition: service_started
+    mem_limit: 128m
+    restart: "no"
+
+  # Read-only HTTP API over marts as btp_api (services/metrics-api/README.md). In fixtures
+  # mode it pins the views' "now" to the recording time of BTP_FIXTURE_SET (ADR-0019).
+  metrics-api:
+    build:
+      context: ../..
+      dockerfile: services/metrics-api/Dockerfile
+    command: ["btp-metrics-api"]
+    environment:
+      BTP_SERVICE_NAME: metrics-api
+      BTP_HOST: 0.0.0.0
+      BTP_PORT: 8000
+      BTP_PG_HOST: postgres
+      BTP_PG_API_PASSWORD: ${BTP_PG_API_PASSWORD:-dev_api}
+      BTP_FEED_MODE: ${BTP_FEED_MODE:-fixtures}
+      BTP_FIXTURE_SET: ${BTP_FIXTURE_SET:-rush-hour}
+      BTP_AS_OF: ${BTP_AS_OF:-}
+      BTP_FIXTURES_DIR: /fixtures
+    depends_on:
+      metrics-jobs-apply:
+        condition: service_completed_successfully
+    mem_limit: 192m
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ../../fixtures/vbb-rt:/fixtures/vbb-rt:ro
+    healthcheck:
+      # Is the server up? Any HTTP answer counts: /health itself returns 503 when the feed
+      # is stale, which is for monitoring, not a reason to fail `make up`.
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.error, urllib.request
+          try:
+              urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3)
+          except urllib.error.HTTPError:
+              pass
+      start_period: 20s
+      start_interval: 2s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Services are added here by their issues (web #10). Pattern: like ingest above; services
+  # that read the schedule views also wait for
   #   schedule-import:
   #     condition: service_completed_successfully
 

@@ -3,7 +3,10 @@ name = "btp-metrics-jobs"
 version = "0.1.0"
 description = "Metrics jobs: build reliability marts, data-quality checks and Parquet exports."
 requires-python = ">=3.12"
-dependencies = ["btp-common"]
+dependencies = ["btp-common", "psycopg[binary]>=3.3.9"]
+
+[project.scripts]
+btp-metrics-jobs = "btp_metrics_jobs.cli:main"
 
 [tool.uv.sources]
 btp-common = { workspace = true }
