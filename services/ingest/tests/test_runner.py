@@ -3,6 +3,7 @@
 import json
 import logging
 import signal
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
@@ -12,6 +13,7 @@ from google.transit.gtfs_realtime_pb2 import FeedMessage
 from btp_common.logging import JsonFormatter
 from btp_ingest import runner
 from btp_ingest.feed import FeedUnavailable, InvalidSnapshot, Snapshot
+from btp_ingest.publish import ProducerFatalError
 from btp_ingest.runner import StopSignal, main, run
 from btp_ingest.settings import IngestSettings
 
@@ -227,5 +229,58 @@ def test_main_runs_fixtures_and_stops_on_sigterm(monkeypatch: pytest.MonkeyPatch
         calls.append((interval_s, stop.is_set()))
 
     monkeypatch.setattr(runner, "run", fake_run)
+    monkeypatch.setattr(runner, "make_producer", lambda *_: QuietProducer())
     assert main() == 0
     assert calls == [(30.0, True)]
+
+
+class QuietProducer:
+    """A producer that accepts everything and delivers instantly."""
+
+    def produce(self, *args: object, **kwargs: object) -> None:
+        """Drop the message."""
+
+    def poll(self, timeout: float = -1) -> int:
+        """Nothing to serve."""
+        return 0
+
+    def flush(self, timeout: float = -1) -> int:
+        """Nothing queued."""
+        return 0
+
+
+def test_main_live_waits_one_interval_before_the_first_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a (re)start in live mode, a stop during the first wait exits with no request."""
+    monkeypatch.setenv("BTP_FEED_MODE", "live")
+    monkeypatch.setenv("BTP_FEED_CONTACT", "https://example.org/contact")
+    waits: list[float | None] = []
+
+    def fake_wait(_event: object, timeout: float | None = None) -> bool:
+        """Record the wait and report that a stop was requested meanwhile."""
+        waits.append(timeout)
+        return True
+
+    def fail_run(*_args: object) -> None:
+        """run() must not be reached."""
+        raise AssertionError("polled before the startup wait ended")
+
+    monkeypatch.setattr(threading.Event, "wait", fake_wait)
+    monkeypatch.setattr(runner, "run", fail_run)
+    monkeypatch.setattr(runner, "make_producer", lambda *_: QuietProducer())
+    assert main() == 0
+    assert waits == [30.0]
+
+
+def test_main_exits_1_on_a_fatal_producer_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fatal producer error ends the service with 1, so the container restarts."""
+    monkeypatch.setenv("BTP_FEED_MODE", "fixtures")
+
+    def fatal_run(*_args: object) -> None:
+        """Fail as Publisher.handle does after a fatal error."""
+        raise ProducerFatalError("fenced")
+
+    monkeypatch.setattr(runner, "run", fatal_run)
+    monkeypatch.setattr(runner, "make_producer", lambda *_: QuietProducer())
+    assert main() == 1

@@ -5,6 +5,7 @@ description = "Ingest service: polls the VBB GTFS-RT feed and publishes changed 
 requires-python = ">=3.12"
 dependencies = [
     "btp-common",
+    "confluent-kafka>=2.16.2",
     "gtfs-realtime-bindings>=3.0.0",
     "httpx>=0.28.1",
 ]

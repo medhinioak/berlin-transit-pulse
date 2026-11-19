@@ -136,6 +136,7 @@ version = "0.1.0"
 source = { editable = "services/ingest" }
 dependencies = [
     { name = "btp-common" },
+    { name = "confluent-kafka" },
     { name = "gtfs-realtime-bindings" },
     { name = "httpx" },
 ]
@@ -143,6 +144,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "btp-common", editable = "libs/common" },
+    { name = "confluent-kafka", specifier = ">=2.16.2" },
     { name = "gtfs-realtime-bindings", specifier = ">=3.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
 ]

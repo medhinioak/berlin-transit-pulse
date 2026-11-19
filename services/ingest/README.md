@@ -1,7 +1,8 @@
 # ingest
 
-Polls VBB's GTFS-Realtime feed, validates each snapshot and passes it to a handler. For now
-the handler only logs; publishing changed trips to Kafka comes with #7. A fixtures mode replays
+Polls VBB's GTFS-Realtime feed, validates each snapshot, compares it with the last published
+one and publishes only new, changed and removed trips to the Kafka topic `trip-updates`
+(contract: [schemas/trip-updates.md](../../schemas/trip-updates.md)). A fixtures mode replays
 recorded snapshots, so the stack runs without network.
 
 Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC-BY 4.0
@@ -14,9 +15,12 @@ BTP_FEED_MODE=fixtures uv run btp-ingest                         # offline repla
 BTP_FEED_MODE=live BTP_FEED_CONTACT=<email or URL> uv run btp-ingest   # the real feed
 ```
 
-The service stops on SIGTERM or SIGINT. It finishes the current poll, closes the connection
-and exits with 0. It exits with 2 if the settings are invalid, if live mode has no contact, or
-if the fixture set doesn't exist.
+The service stops on SIGTERM or SIGINT. It finishes the current poll, flushes Kafka, closes the
+connection and exits with 0. In live mode it waits one poll interval before the first request,
+so a crash-restart loop can't exceed VBB's rate limit (the rate guard lives in one process).
+It exits with 2 if the settings are invalid, if live mode has no contact, or if the fixture
+set doesn't exist, and with 1 after a fatal Kafka producer error (the idempotent producer
+can't be used again, so the container restarts with a new one).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -27,7 +31,10 @@ if the fixture set doesn't exist.
 | `BTP_FEED_MAX_AGE_S` | `180` | an older header is logged as stale but still passed on |
 | `BTP_FIXTURE_SET` | `rush-hour` | `fixtures/vbb-rt/<set>/` to replay (`rush-hour`, `evening`) |
 | `BTP_FIXTURES_DIR` | `fixtures/` in the checkout | set it in containers (the package isn't in the repo there) |
-| `BTP_LOG_LEVEL` | `INFO` | `DEBUG` adds one line per handled snapshot |
+| `BTP_KAFKA_BOOTSTRAP` | `localhost:9094` | broker; compose sets `kafka:9092` |
+| `BTP_KAFKA_TOPIC` | `trip-updates` | topic to publish to |
+| `BTP_PUBLISH_TIMEOUT_S` | `10` | a message not delivered within this fails (the producer's `message.timeout.ms`); the flush waits 5 s longer, so nothing carries over to the next snapshot |
+| `BTP_LOG_LEVEL` | `INFO` | log level |
 
 ## Politeness (live mode)
 
@@ -70,3 +77,28 @@ Every poll writes one JSON line with the message `poll`. For example, from fixtu
 `status` is always a string: the HTTP code (`"200"`, `"304"`, `"429"`, `"503"`), `"network"`
 or `"invalid"`. Failures are logged at WARNING level and add `next_poll_s`, `retry_after_s` and,
 where there is one, a `reason`.
+
+## Publishing changes
+
+`diff.py` keys each trip by `"{trip_id}|{start_date}"` (never `FeedEntity.id`, which VBB
+changes with the content) and fingerprints it: a hash of the TripUpdate serialized
+deterministically with `timestamp` cleared. Equal fingerprint, nothing published.
+
+`publish.py` sends new and changed trips (the TripUpdate bytes) and a tombstone per vanished
+trip, flushes, and only then keeps the snapshot's fingerprints. If any message fails, the
+state stays as it was and the next snapshot re-sends the changes; a failure is logged, not
+raised, so polling continues. Fingerprints live in memory: after a restart every trip is sent
+as `new`. A snapshot whose header timestamp is older than the last published one is skipped;
+an equal timestamp is diffed as usual (a repeat publishes nothing).
+
+After each snapshot one `publish` line follows the `poll` line:
+
+```json
+{"ts": "2026-11-19T05:03:58.955038+00:00", "level": "INFO", "service": "ingest",
+ "logger": "btp_ingest.publish", "message": "publish", "trips": 168, "new": 5, "changed": 16,
+ "removed": 3, "duplicates": 0, "change_rate_pct": 14.29, "publish_ms": 45, "committed": true}
+```
+
+`change_rate_pct` is (new + changed + removed) / trips. When `committed` is false the line is a
+WARNING and adds `failed` and `still_queued`. Duplicate keys in one snapshot get one extra
+WARNING line.

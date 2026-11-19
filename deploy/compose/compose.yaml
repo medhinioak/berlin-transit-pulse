@@ -120,23 +120,35 @@ services:
       - ../../fixtures/gtfs-static/mini:/fixtures/gtfs-static/mini:ro
     restart: "no"
 
-  # Services are added here by their issues (ingest #7, schedule #5, processor #8,
-  # metrics-api #9, web #10). Pattern:
-  #
-  # ingest:
-  #   build:
-  #     context: ../..
-  #     dockerfile: services/ingest/Dockerfile
-  #   environment:
-  #     BTP_SERVICE_NAME: ingest
-  #     BTP_KAFKA_BOOTSTRAP: kafka:9092
-  #   depends_on:
-  #     kafka-init:
-  #       condition: service_completed_successfully
-  #     schedule-import:        # services that read the schedule views
-  #       condition: service_completed_successfully
-  #   mem_limit: 128m
-  #   restart: unless-stopped
+  # Polls the feed and publishes changed trips to trip-updates (schemas/trip-updates.md).
+  # Replays the committed fixtures by default; BTP_FEED_MODE=live polls VBB (needs
+  # BTP_FEED_CONTACT, at most one request per 30 s, see CLAUDE.md feed etiquette).
+  ingest:
+    build:
+      context: ../..
+      dockerfile: services/ingest/Dockerfile
+    command: ["btp-ingest"]
+    environment:
+      BTP_SERVICE_NAME: ingest
+      BTP_FEED_MODE: ${BTP_FEED_MODE:-fixtures}
+      BTP_FIXTURE_SET: ${BTP_FIXTURE_SET:-rush-hour}
+      BTP_FEED_CONTACT: ${BTP_FEED_CONTACT:-https://github.com/medhinioak/berlin-transit-pulse}
+      BTP_KAFKA_BOOTSTRAP: kafka:9092
+      BTP_FIXTURES_DIR: /fixtures
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    mem_limit: 256m
+    # A live request can take up to 20 s (timeout), longer than Docker's default 10 s.
+    stop_grace_period: 30s
+    volumes:
+      - ../../fixtures/vbb-rt:/fixtures/vbb-rt:ro
+    restart: unless-stopped
+
+  # Services are added here by their issues (schedule #5, processor #8, metrics-api #9,
+  # web #10). Pattern: like ingest above; services that read the schedule views also wait for
+  #   schedule-import:
+  #     condition: service_completed_successfully
 
 volumes:
   kafka-data:
