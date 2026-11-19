@@ -1,4 +1,4 @@
-"""Unit tests: the reference time the API pins for the views (ADR-0018)."""
+"""Unit tests: the reference time the API pins for the views (ADR-0019)."""
 
 from datetime import UTC, datetime
 

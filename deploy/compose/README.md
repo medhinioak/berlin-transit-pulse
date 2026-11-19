@@ -24,7 +24,7 @@ make down          # stop, keep data
 | `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 30 s stop grace period |
 | `stop-event-processor` | `services/stop-event-processor/Dockerfile` | Consumes `trip-updates` and keeps the latest prediction per trip and stop in `events.trip_state` and `events.stop_predictions` as `btp_processor` ([README](../../services/stop-event-processor/README.md)). 256 MB limit |
 | `metrics-jobs-apply` | `services/metrics-jobs/Dockerfile` | Creates or replaces the `marts` views as `btp_metrics_jobs`, then exits 0. Waits up to 60 s for the processor's tables ([README](../../services/metrics-jobs/README.md)) |
-| `metrics-api` | `services/metrics-api/Dockerfile` | Read-only HTTP API on port 8000 as `btp_api` ([README](../../services/metrics-api/README.md)). In fixtures mode it pins "now" to the recording time (ADR-0018). 192 MB limit |
+| `metrics-api` | `services/metrics-api/Dockerfile` | Read-only HTTP API on port 8000 as `btp_api` ([README](../../services/metrics-api/README.md)). In fixtures mode it pins "now" to the recording time (ADR-0019). 192 MB limit |
 
 Topics are created only by `kafka-init`. Auto-creation is off, so a misspelt topic name
 fails instead of creating a new topic. `--if-not-exists` leaves an existing topic as it is:

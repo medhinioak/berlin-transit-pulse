@@ -2,7 +2,7 @@
 -- mode, for Berlin trips of the active schedule. On-time rates, coverage thresholds and the
 -- other metric definitions wait for ADR-0005 (M3); don't add them here.
 --
--- Reference time ("now"): the session setting btp.as_of if set, else now() (ADR-0018). The
+-- Reference time ("now"): the session setting btp.as_of if set, else now() (ADR-0019). The
 -- API sets it in fixtures mode to the recording time of the replayed snapshots.
 --
 -- Running trip: in trip_state and not removed, not CANCELED, in Berlin, and its earliest

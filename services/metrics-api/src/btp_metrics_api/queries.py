@@ -31,5 +31,5 @@ def latest_feed_ts(conn: psycopg.Connection[Any]) -> datetime | None:
 
 
 def set_as_of(conn: psycopg.Connection[Any], as_of: datetime) -> None:
-    """Pin the views' reference time for this session (setting btp.as_of, ADR-0018)."""
+    """Pin the views' reference time for this session (setting btp.as_of, ADR-0019)."""
     conn.execute(SET_AS_OF, [as_of.isoformat()])

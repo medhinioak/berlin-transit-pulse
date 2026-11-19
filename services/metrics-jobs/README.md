@@ -50,7 +50,7 @@ definitions of ADR-0005 (M3). Don't present it as one.
 | `computed_at` | `now()` when the row was computed |
 
 - **Now** is the session setting `btp.as_of` if set, else `now()`
-  ([ADR-0018](../../docs/adr/0018-pin-the-reference-time-of-live-views-with-a-session-setting.md)).
+  ([ADR-0019](../../docs/adr/0019-pin-the-reference-time-of-live-views-with-a-session-setting.md)).
   metrics-api sets it in fixtures mode to the recording time; in live mode it is `now()`.
 - **Stops**: only stops with `stop_schedule_relationship = 'SCHEDULED'` count, below. SKIPPED
   and NO_DATA stops have predicted times but never a delay (live data, 2026-11-19: 2,918 and

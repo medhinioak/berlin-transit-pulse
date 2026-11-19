@@ -185,7 +185,7 @@ services:
     restart: "no"
 
   # Read-only HTTP API over marts as btp_api (services/metrics-api/README.md). In fixtures
-  # mode it pins the views' "now" to the recording time of BTP_FIXTURE_SET (ADR-0018).
+  # mode it pins the views' "now" to the recording time of BTP_FIXTURE_SET (ADR-0019).
   metrics-api:
     build:
       context: ../..

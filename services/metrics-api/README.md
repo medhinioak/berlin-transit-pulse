@@ -35,7 +35,7 @@ database is down; `/health` then answers 503 and the data endpoint 503.
 ### Reference time
 
 The "now" views use the session setting `btp.as_of`, or `now()` when it isn't set
-([ADR-0018](../../docs/adr/0018-pin-the-reference-time-of-live-views-with-a-session-setting.md)).
+([ADR-0019](../../docs/adr/0019-pin-the-reference-time-of-live-views-with-a-session-setting.md)).
 In fixtures mode the stop times are those recorded on 2026-11-18, so the API pins `btp.as_of`
 to the header time of the replayed set's last snapshot (rush-hour: 2026-11-18T17:04:51Z). In
 live mode it sets nothing. The value is logged at start (`started`, field `as_of`) and

@@ -23,7 +23,7 @@ class ApiSettings(BaseServiceSettings):
     pool_max_size: int = Field(default=4, ge=1)
     # /health fails when the newest feed time the processor applied is older than this.
     feed_max_age_s: int = Field(default=300, gt=0)
-    # Reference time for the "now" views (ADR-0018). Unset in live mode: the views use now().
+    # Reference time for the "now" views (ADR-0019). Unset in live mode: the views use now().
     # In fixtures mode it defaults to the header time of the replayed set's last snapshot.
     # Must carry an offset (e.g. ...Z): a naive time would be read in the session time zone.
     as_of: AwareDatetime | None = None

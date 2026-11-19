@@ -1,4 +1,4 @@
-# ADR-0018: Pin the reference time of live views with a session setting
+# ADR-0019: Pin the reference time of live views with a session setting
 
 - Status: Accepted
 - Date: 2026-11-19
