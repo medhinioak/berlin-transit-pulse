@@ -16,8 +16,16 @@ log = logging.getLogger(__name__)
 
 SCHEMA = b"gtfs-rt.TripUpdate/2.0"
 
+# flush() waits this much longer than the delivery timeout, so when it returns every message
+# of the snapshot has been delivered or has failed: nothing carries over to the next one.
+FLUSH_MARGIN_S = 5.0
+
 Headers = list[tuple[str, str | bytes | None]]
 DeliveryCallback = Callable[[KafkaError | None, Message], None]
+
+
+class ProducerFatalError(Exception):
+    """The idempotent producer hit an unrecoverable error; the process must restart."""
 
 
 class Producer(Protocol):
@@ -44,8 +52,12 @@ class Producer(Protocol):
         ...
 
 
-def make_producer(bootstrap: str) -> KafkaProducer:
-    """Return an idempotent, zstd-compressed producer that waits for all replicas."""
+def make_producer(bootstrap: str, delivery_timeout_s: float) -> KafkaProducer:
+    """Return an idempotent, zstd-compressed producer that waits for all replicas.
+
+    A message that isn't delivered within delivery_timeout_s fails (librdkafka's default is
+    5 min), so Publisher's flush always ends with every message delivered or failed.
+    """
     return KafkaProducer(
         {
             "bootstrap.servers": bootstrap,
@@ -53,6 +65,7 @@ def make_producer(bootstrap: str) -> KafkaProducer:
             "enable.idempotence": True,
             "compression.type": "zstd",
             "linger.ms": 50,
+            "message.timeout.ms": round(delivery_timeout_s * 1000),
         }
     )
 
@@ -62,25 +75,29 @@ class Publisher:
 
     The fingerprints (and the last header timestamp) are updated only after every message of
     a snapshot was delivered, so a failed publish is retried by the next snapshot's diff.
+    delivery_timeout_s must match the producer's (make_producer).
     """
 
-    def __init__(self, producer: Producer, topic: str, flush_timeout_s: float = 10.0) -> None:
+    def __init__(self, producer: Producer, topic: str, delivery_timeout_s: float = 10.0) -> None:
         """Start with no state: the first snapshot publishes every trip as new."""
         self.producer = producer
         self.topic = topic
-        self.flush_timeout_s = flush_timeout_s
+        self.flush_timeout_s = delivery_timeout_s + FLUSH_MARGIN_S
         self.fingerprints: Fingerprints = {}
         self.last_feed_ts: datetime | None = None
         self._failed = 0  # delivery failures of the snapshot being published
+        self._fatal: KafkaError | None = None
 
     def handle(self, snapshot: Snapshot) -> bool:
         """Publish the snapshot's changes and log a summary; return True if state was committed.
 
-        Failures are logged, not raised, so the poll loop keeps running.
+        Failures are logged, not raised, so the poll loop keeps running. Only a fatal producer
+        error raises ProducerFatalError: the producer can't be used again.
         """
-        if self.last_feed_ts is not None and snapshot.feed_timestamp <= self.last_feed_ts:
+        # Equal timestamps are diffed: a repeat publishes nothing, new content isn't lost.
+        if self.last_feed_ts is not None and snapshot.feed_timestamp < self.last_feed_ts:
             log.warning(
-                "snapshot not newer than the last published one, skipped",
+                "snapshot older than the last published one, skipped",
                 extra={
                     "fields": {
                         "feed_ts": snapshot.feed_timestamp.isoformat(),
@@ -96,6 +113,8 @@ class Publisher:
         not_queued = self._send(changes, snapshot)
         queued = self.producer.flush(self.flush_timeout_s)
         failed = self._failed + not_queued
+        if self._fatal is not None:
+            raise ProducerFatalError(str(self._fatal))
         ok = failed == 0 and queued == 0
         if ok:
             self.fingerprints = changes.fingerprints
@@ -122,9 +141,11 @@ class Publisher:
         return ok
 
     def _on_delivery(self, err: KafkaError | None, _msg: Message) -> None:
-        """Count messages the broker didn't accept."""
+        """Count messages the broker didn't accept and remember a fatal error."""
         if err is not None:
             self._failed += 1
+            if err.fatal():
+                self._fatal = err
 
     def _send(self, changes: Changes, snapshot: Snapshot) -> int:
         """Queue every change; return 1 if the producer refused one (rest skipped), else 0."""
@@ -156,6 +177,8 @@ class Publisher:
                         headers=headers(event),
                     )
                 except (BufferError, KafkaException) as exc:
+                    if isinstance(exc, KafkaException) and exc.args[0].fatal():
+                        self._fatal = exc.args[0]
                     log.warning("produce failed: %s", exc)
                     return 1
                 self.producer.poll(0)

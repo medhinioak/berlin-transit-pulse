@@ -22,7 +22,7 @@ from btp_ingest.feed import (
     Snapshot,
     now_utc,
 )
-from btp_ingest.publish import Publisher, make_producer
+from btp_ingest.publish import ProducerFatalError, Publisher, make_producer
 from btp_ingest.settings import IngestSettings
 
 log = logging.getLogger(__name__)
@@ -155,13 +155,17 @@ def main() -> int:
             }
         },
     )
-    producer = make_producer(settings.kafka_bootstrap)
+    producer = make_producer(settings.kafka_bootstrap, settings.publish_timeout_s)
     publisher = Publisher(producer, settings.kafka_topic, settings.publish_timeout_s)
     try:
         # RateGuard lives in one process: after a crash and restart, wait a full interval
         # before the first live request so a restart loop can't exceed VBB's rate limit.
         if settings.feed_mode == "fixtures" or not stop.wait(settings.poll_interval_s):
             run(source, publisher.handle, settings.poll_interval_s, stop)
+    except ProducerFatalError as exc:
+        # Exit so the container restarts with a new producer.
+        log.error("fatal Kafka producer error, exiting: %s", exc)
+        return 1
     finally:
         source.close()
         producer.flush(settings.publish_timeout_s)

@@ -3,13 +3,14 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from confluent_kafka import KafkaError
+import pytest
+from confluent_kafka import KafkaError, KafkaException
 from google.transit.gtfs_realtime_pb2 import FeedMessage, TripUpdate
 
 from btp_common.fixtures import load_rt_fixture
 from btp_ingest.diff import diff
 from btp_ingest.feed import Snapshot
-from btp_ingest.publish import DeliveryCallback, Headers, Publisher
+from btp_ingest.publish import DeliveryCallback, Headers, ProducerFatalError, Publisher
 
 START = datetime(2026, 11, 18, 17, 3, 41, tzinfo=UTC)
 
@@ -28,10 +29,12 @@ class FakeProducer:
     """Records messages; fails deliveries or leaves messages queued on request."""
 
     fail_deliveries: bool = False
+    fatal: bool = False  # failures are fatal errors
     leave_queued: int = 0
     refuse_after: int | None = None
     sent: list[Sent] = field(default_factory=list)
     pending: list[DeliveryCallback] = field(default_factory=list)
+    flush_timeouts: list[float] = field(default_factory=list)
 
     def produce(
         self,
@@ -44,6 +47,8 @@ class FakeProducer:
     ) -> None:
         """Record the message and remember its callback for flush()."""
         if self.refuse_after is not None and len(self.sent) >= self.refuse_after:
+            if self.fatal:
+                raise KafkaException(KafkaError(KafkaError._FENCED, fatal=True))
             raise BufferError("queue full")
         assert topic == "trip-updates"
         assert isinstance(key, str) and not isinstance(value, str)
@@ -58,7 +63,10 @@ class FakeProducer:
 
     def flush(self, timeout: float = -1) -> int:
         """Run the delivery callbacks; return the configured number still queued."""
-        err = KafkaError(KafkaError._MSG_TIMED_OUT) if self.fail_deliveries else None
+        self.flush_timeouts.append(timeout)
+        err = None
+        if self.fail_deliveries:
+            err = KafkaError(KafkaError._MSG_TIMED_OUT, fatal=self.fatal)
         for callback in self.pending:
             callback(err, None)  # type: ignore[arg-type]  # the publisher ignores the message
         self.pending.clear()
@@ -143,8 +151,8 @@ def test_refused_produce_keeps_state() -> None:
     assert publisher.fingerprints == {}
 
 
-def test_snapshot_not_newer_than_the_last_is_skipped() -> None:
-    """A header timestamp that goes backwards (or repeats) publishes nothing."""
+def test_older_snapshot_is_skipped() -> None:
+    """A header timestamp that goes backwards publishes nothing."""
     first, second = load_rt_fixture("rush-hour")[:2]
     producer = FakeProducer()
     publisher = Publisher(producer, "trip-updates")
@@ -152,6 +160,43 @@ def test_snapshot_not_newer_than_the_last_is_skipped() -> None:
     state = publisher.fingerprints
     producer.sent.clear()
     assert not publisher.handle(_snapshot(second, START - timedelta(seconds=30)))
-    assert not publisher.handle(_snapshot(second, START))
     assert producer.sent == []
     assert publisher.fingerprints is state
+
+
+def test_same_timestamp_with_new_content_is_published() -> None:
+    """An equal header timestamp is diffed: a repeat sends nothing, new content isn't lost."""
+    first, second = load_rt_fixture("rush-hour")[:2]
+    producer = FakeProducer()
+    publisher = Publisher(producer, "trip-updates")
+    assert publisher.handle(_snapshot(first, START))
+    producer.sent.clear()
+    assert publisher.handle(_snapshot(first, START))
+    assert producer.sent == []
+    assert publisher.handle(_snapshot(second, START))
+    assert len(producer.sent) == diff(diff({}, first).fingerprints, second).events
+
+
+def test_flush_outlasts_the_delivery_timeout() -> None:
+    """flush() waits longer than a message can live, so nothing carries over."""
+    producer = FakeProducer()
+    publisher = Publisher(producer, "trip-updates", delivery_timeout_s=10.0)
+    publisher.handle(_snapshot(load_rt_fixture("evening")[0], START))
+    assert producer.flush_timeouts and min(producer.flush_timeouts) > 10.0
+
+
+def test_fatal_delivery_error_raises() -> None:
+    """A fatal error means the producer can't be used again: raise so the service restarts."""
+    producer = FakeProducer(fail_deliveries=True, fatal=True)
+    publisher = Publisher(producer, "trip-updates")
+    with pytest.raises(ProducerFatalError):
+        publisher.handle(_snapshot(load_rt_fixture("evening")[0], START))
+    assert publisher.fingerprints == {}
+
+
+def test_fatal_produce_error_raises() -> None:
+    """A fatal KafkaException from produce() raises too."""
+    producer = FakeProducer(refuse_after=2, fatal=True)
+    publisher = Publisher(producer, "trip-updates")
+    with pytest.raises(ProducerFatalError):
+        publisher.handle(_snapshot(load_rt_fixture("evening")[0], START))

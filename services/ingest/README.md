@@ -17,8 +17,10 @@ BTP_FEED_MODE=live BTP_FEED_CONTACT=<email or URL> uv run btp-ingest   # the rea
 
 The service stops on SIGTERM or SIGINT. It finishes the current poll, flushes Kafka, closes the
 connection and exits with 0. In live mode it waits one poll interval before the first request,
-so a crash-restart loop can't exceed VBB's rate limit (the rate guard lives in one process). It exits with 2 if the settings are invalid, if live mode has no contact, or
-if the fixture set doesn't exist.
+so a crash-restart loop can't exceed VBB's rate limit (the rate guard lives in one process).
+It exits with 2 if the settings are invalid, if live mode has no contact, or if the fixture
+set doesn't exist, and with 1 after a fatal Kafka producer error (the idempotent producer
+can't be used again, so the container restarts with a new one).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -31,7 +33,7 @@ if the fixture set doesn't exist.
 | `BTP_FIXTURES_DIR` | `fixtures/` in the checkout | set it in containers (the package isn't in the repo there) |
 | `BTP_KAFKA_BOOTSTRAP` | `localhost:9094` | broker; compose sets `kafka:9092` |
 | `BTP_KAFKA_TOPIC` | `trip-updates` | topic to publish to |
-| `BTP_PUBLISH_TIMEOUT_S` | `10` | how long to wait for a snapshot's messages to be delivered |
+| `BTP_PUBLISH_TIMEOUT_S` | `10` | a message not delivered within this fails (the producer's `message.timeout.ms`); the flush waits 5 s longer, so nothing carries over to the next snapshot |
 | `BTP_LOG_LEVEL` | `INFO` | log level |
 
 ## Politeness (live mode)
@@ -86,7 +88,8 @@ deterministically with `timestamp` cleared. Equal fingerprint, nothing published
 trip, flushes, and only then keeps the snapshot's fingerprints. If any message fails, the
 state stays as it was and the next snapshot re-sends the changes; a failure is logged, not
 raised, so polling continues. Fingerprints live in memory: after a restart every trip is sent
-as `new`. A snapshot whose header timestamp isn't newer than the last published one is skipped.
+as `new`. A snapshot whose header timestamp is older than the last published one is skipped;
+an equal timestamp is diffed as usual (a repeat publishes nothing).
 
 After each snapshot one `publish` line follows the `poll` line:
 

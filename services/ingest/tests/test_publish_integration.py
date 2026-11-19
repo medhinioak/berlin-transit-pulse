@@ -64,7 +64,7 @@ def _consume_all(topic: str, expected: int) -> list[Message]:
 def test_fixture_set_round_trip(topic: str) -> None:
     """Messages, keys, headers and tombstones on the topic match the diffs of the set."""
     snapshots = load_rt_fixture("rush-hour")
-    publisher = Publisher(make_producer(BOOTSTRAP), topic)
+    publisher = Publisher(make_producer(BOOTSTRAP, 10.0), topic, 10.0)
     expected: list[tuple[str, bytes]] = []
     state: dict[str, bytes] = {}
     for i, message in enumerate(snapshots):

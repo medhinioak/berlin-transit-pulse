@@ -43,7 +43,7 @@ up: ## Start Kafka, Postgres and the services; waits until healthy, topics and s
 	  code=$$(docker wait $$($(COMPOSE) ps -aq $$s)); \
 	  [ "$$code" = 0 ] || { echo "$$s exited with $$code"; exit 1; }; \
 	done
-	$(COMPOSE) up -d --wait $$($(COMPOSE) config --services | grep -vxF $(ONESHOTS:%=-e %))
+	$(COMPOSE) up -d --wait --no-deps $$($(COMPOSE) config --services | grep -vxF $(ONESHOTS:%=-e %))
 
 down: ## Stop the stack (keeps data; add -v by hand to reset volumes)
 	$(COMPOSE) down

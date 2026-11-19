@@ -15,6 +15,9 @@ that disappeared. Producer: ingest (#7). Consumer: processor (#8).
 
 `"{trip_id}|{start_date}"` (UTF-8), from the TripUpdate's trip descriptor, e.g.
 `279146123|20261118`. If `start_date` is empty the separator stays: `279146123|`.
+None of the recorded snapshots (fixtures, and ~11,100 live trips on 2026-11-19) has an
+empty `start_date`. If VBB ever sent the same trip with and without it, the two would be
+separate keys, and the switch would show up as a `new` plus a `removed`.
 
 The key never uses `FeedEntity.id`: VBB changes the entity ID whenever a trip's content
 changes, so it doesn't identify a trip across snapshots.
@@ -58,12 +61,13 @@ logs the duplicate count.
   `acks=all`), so the events of one trip arrive in the order they were published. There is
   no ordering across keys or partitions.
 - **At least once.** Ingest updates its state only after every message of a snapshot was
-  delivered. If any message fails, the next snapshot is diffed against the old state again,
-  so some messages are published twice.
+  delivered. A message that isn't delivered within 10 s (`BTP_PUBLISH_TIMEOUT_S`) fails.
+  If any message fails, the next snapshot is diffed against the old state again, so some
+  messages are published twice.
 - **Restarts.** Ingest keeps its state in memory. After a restart the first snapshot
   publishes every trip as `new` (~10,000 messages), including trips that are unchanged.
   Removals for trips that vanished while ingest was down are never published.
-- **Order of snapshots.** A snapshot whose header timestamp isn't newer than the last
+- **Order of snapshots.** A snapshot whose header timestamp is older than the last
   published one is skipped.
 
 ## What consumers must do

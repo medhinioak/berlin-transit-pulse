@@ -26,5 +26,5 @@ class IngestSettings(BaseServiceSettings):
     # Kafka: localhost:9094 is the compose broker's host listener; compose sets kafka:9092.
     kafka_bootstrap: str = "localhost:9094"
     kafka_topic: str = "trip-updates"
-    # How long to wait for a snapshot's messages to be delivered before giving up on it.
+    # A message not delivered within this fails; the next poll retries the snapshot.
     publish_timeout_s: float = Field(default=10.0, gt=0)
