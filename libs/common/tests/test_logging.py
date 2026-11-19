@@ -26,7 +26,7 @@ def _configure(level: LogLevel = "INFO") -> None:
     configure_logging(BaseServiceSettings(service_name="ingest", log_level=level))
 
 
-def _lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, str]]:
+def _lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, object]]:
     """Parse captured stdout as JSON lines."""
     return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
 
@@ -47,7 +47,7 @@ def test_timestamp_is_utc(capsys: pytest.CaptureFixture[str]) -> None:
     _configure()
     logging.getLogger().warning("x")
     [entry] = _lines(capsys)
-    assert datetime.fromisoformat(entry["ts"]).utcoffset() == timedelta(0)
+    assert datetime.fromisoformat(str(entry["ts"])).utcoffset() == timedelta(0)
 
 
 def test_service_and_level_come_from_env(
@@ -72,7 +72,7 @@ def test_exception_is_serialised(capsys: pytest.CaptureFixture[str]) -> None:
     except ValueError:
         logging.getLogger().exception("failed")
     [entry] = _lines(capsys)
-    assert "ValueError: boom" in entry["exc_info"]
+    assert "ValueError: boom" in str(entry["exc_info"])
 
 
 def test_reconfiguring_does_not_duplicate_lines(capsys: pytest.CaptureFixture[str]) -> None:
@@ -81,3 +81,12 @@ def test_reconfiguring_does_not_duplicate_lines(capsys: pytest.CaptureFixture[st
     _configure()
     logging.getLogger().warning("once")
     assert len(_lines(capsys)) == 1
+
+
+def test_structured_fields_are_added(capsys: pytest.CaptureFixture[str]) -> None:
+    """extra={"fields": ...} adds keys to the JSON object but can't overwrite standard ones."""
+    _configure()
+    logging.getLogger().info("poll", extra={"fields": {"status": 304, "message": "spoofed"}})
+    [entry] = _lines(capsys)
+    assert entry["status"] == 304
+    assert entry["message"] == "poll"

@@ -8,6 +8,18 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 
 ## Feed
 
+### Feed header several minutes old at night
+
+- **Seen:** 2026-11-19 00:32 Berlin time, #6 (feed client), manual live check.
+- **Symptom:** the first poll got a 200 whose header timestamp was 448 s old, so the
+  "stale feed" warning fired (limit `BTP_FEED_MAX_AGE_S`, 180 s). The next two polls got 304.
+- **Cause:** not known yet. VBB may publish less often at night. The rush-hour fixtures had
+  header times 20–40 s apart.
+- **Fix:** none needed for ingest: stale snapshots are logged and still passed on, as designed.
+  Before tuning the limit or alerting on it, check the header age over a full day once ingest
+  runs 24/7 (M2).
+- **Status:** _open_
+
 ### Static GTFS download sends no ETag or Last-Modified
 
 - **Seen:** 2026-11-18, #5 (schedule import), second `make up`.

@@ -17,6 +17,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Start the stack locally: make up (Kafka, Postgres, all services; waits until healthy;
   replays fixtures when BTP_FEED_MODE=fixtures). Stop / follow logs: make down / make logs
 - Inspect the stack: make ps, make kafka-topics, make psql (details: deploy/compose/README.md)
+- Run ingest on its own: BTP_FEED_MODE=fixtures uv run btp-ingest (offline replay; live mode needs
+  BTP_FEED_CONTACT and calls the real feed, see Rules). Config: services/ingest/README.md
 - Schedule versions: uv run btp-schedule status | import [--file PATH] [--activate] | activate ID
   (services/schedule/README.md)
 - Tests: make test (unit, with coverage; one test:

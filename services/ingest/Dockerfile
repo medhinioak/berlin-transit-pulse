@@ -35,5 +35,8 @@ COPY --from=build /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 USER btp
-# Placeholder until the service has an entry point (#7).
-CMD ["python", "-c", "import btp_ingest"]
+# CI runs the image with its default command and expects it to exit 0, so the default only
+# checks that the service and its dependencies import. Compose runs `command: btp-ingest`
+# (#7): live mode needs BTP_FEED_CONTACT, fixtures mode the fixtures mounted at
+# BTP_FIXTURES_DIR.
+CMD ["python", "-c", "import btp_ingest.runner"]
