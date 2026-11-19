@@ -22,6 +22,7 @@ make down          # stop, keep data
 | `postgres` | `postgres:16.16` | Database `btp` with one schema per writing service |
 | `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. `BTP_FEED_MODE=fixtures` imports the mini GTFS offline (see `services/schedule/README.md`) |
 | `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 30 s stop grace period |
+| `stop-event-processor` | `services/stop-event-processor/Dockerfile` | Consumes `trip-updates` and keeps the latest prediction per trip and stop in `events.trip_state` and `events.stop_predictions` as `btp_processor` ([README](../../services/stop-event-processor/README.md)). 256 MB limit |
 
 Topics are created only by `kafka-init`. Auto-creation is off, so a misspelt topic name
 fails instead of creating a new topic. `--if-not-exists` leaves an existing topic as it is:
@@ -76,9 +77,14 @@ Budgeted for the 2 GB release server:
 | `postgres` | 512 MB | `shared_buffers=128MB`, `shm_size: 128m` (counts toward the limit when used) |
 | `kafka-init` | 256 MB | runs once at start-up, then exits |
 | `schedule-import` | 384 MB | runs once at start-up; peak ~65 MB on the real feed (COPY streaming), Postgres peaks ~210 MB meanwhile |
+| `ingest` | 256 MB | ~33 MB in fixtures mode |
+| `stop-event-processor` | 256 MB | ~46 MB in fixtures mode; librdkafka prefetch capped at 16 MB (`queued.max.messages.kbytes`) |
 
-The services and the OS share the remaining ~700 MB. Check with `docker stats --no-stream`
-after adding anything.
+The limits of the long-running containers (kafka, postgres, ingest, stop-event-processor) add
+up to 1,792 MB, leaving ~250 MB for the OS if all of them reached their limits at once. Measured
+use on 2026-11-19 (fixtures mode, #8) was ~700 MB in total: kafka ~550, postgres ~64, ingest ~33,
+processor ~46. A new service needs a limit that still fits next to these; check with
+`docker stats --no-stream` after adding anything.
 
 ## Resetting
 
