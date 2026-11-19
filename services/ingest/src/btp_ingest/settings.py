@@ -23,3 +23,8 @@ class IngestSettings(BaseServiceSettings):
     # Older headers are logged as stale but still passed on.
     feed_max_age_s: float = Field(default=180.0, gt=0)
     fixture_set: str = "rush-hour"
+    # Kafka: localhost:9094 is the compose broker's host listener; compose sets kafka:9092.
+    kafka_bootstrap: str = "localhost:9094"
+    kafka_topic: str = "trip-updates"
+    # How long to wait for a snapshot's messages to be delivered before giving up on it.
+    publish_timeout_s: float = Field(default=10.0, gt=0)

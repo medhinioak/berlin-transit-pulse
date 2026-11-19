@@ -22,11 +22,12 @@ from btp_ingest.feed import (
     Snapshot,
     now_utc,
 )
+from btp_ingest.publish import Publisher, make_producer
 from btp_ingest.settings import IngestSettings
 
 log = logging.getLogger(__name__)
 
-Handler = Callable[[Snapshot], None]
+Handler = Callable[[Snapshot], object]
 
 
 class Source(Protocol):
@@ -53,11 +54,6 @@ class StopSignal(Protocol):
         ...
 
 
-def log_snapshot(snapshot: Snapshot) -> None:
-    """Default handler until Kafka publishing (#7): the poll line is the summary."""
-    log.debug("snapshot %s with %d entities", snapshot.etag, len(snapshot.message.entity))
-
-
 def run(
     source: Source,
     handler: Handler,
@@ -70,7 +66,8 @@ def run(
     """Poll source every interval_s (start to start) until stop is set, one log line per poll.
 
     429, 5xx and network errors back off exponentially (Backoff); invalid snapshots are
-    counted and skipped. Exceptions from the handler end the loop.
+    counted and skipped. Exceptions from the handler end the loop, so handlers log and
+    swallow expected failures (Publisher does) and only bugs stop the service.
     """
     backoff = Backoff()
     invalid_total = 0
@@ -158,9 +155,15 @@ def main() -> int:
             }
         },
     )
+    producer = make_producer(settings.kafka_bootstrap)
+    publisher = Publisher(producer, settings.kafka_topic, settings.publish_timeout_s)
     try:
-        run(source, log_snapshot, settings.poll_interval_s, stop)
+        # RateGuard lives in one process: after a crash and restart, wait a full interval
+        # before the first live request so a restart loop can't exceed VBB's rate limit.
+        if settings.feed_mode == "fixtures" or not stop.wait(settings.poll_interval_s):
+            run(source, publisher.handle, settings.poll_interval_s, stop)
     finally:
         source.close()
+        producer.flush(settings.publish_timeout_s)
     log.info("stopped")
     return 0

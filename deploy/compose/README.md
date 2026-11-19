@@ -21,6 +21,7 @@ make down          # stop, keep data
 | `kafka-init` | `apache/kafka:4.4.0` | Creates the topics, then exits 0. Safe to re-run (`--if-not-exists`) |
 | `postgres` | `postgres:16.16` | Database `btp` with one schema per writing service |
 | `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. `BTP_FEED_MODE=fixtures` imports the mini GTFS offline (see `services/schedule/README.md`) |
+| `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 30 s stop grace period |
 
 Topics are created only by `kafka-init`. Auto-creation is off, so a misspelt topic name
 fails instead of creating a new topic. `--if-not-exists` leaves an existing topic as it is:
