@@ -23,6 +23,8 @@ make down          # stop, keep data
 | `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. `BTP_FEED_MODE=fixtures` imports the mini GTFS offline (see `services/schedule/README.md`) |
 | `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 30 s stop grace period |
 | `stop-event-processor` | `services/stop-event-processor/Dockerfile` | Consumes `trip-updates` and keeps the latest prediction per trip and stop in `events.trip_state` and `events.stop_predictions` as `btp_processor` ([README](../../services/stop-event-processor/README.md)). 256 MB limit |
+| `metrics-jobs-apply` | `services/metrics-jobs/Dockerfile` | Creates or replaces the `marts` views as `btp_metrics_jobs`, then exits 0. Waits up to 60 s for the processor's tables ([README](../../services/metrics-jobs/README.md)) |
+| `metrics-api` | `services/metrics-api/Dockerfile` | Read-only HTTP API on port 8000 as `btp_api` ([README](../../services/metrics-api/README.md)). In fixtures mode it pins "now" to the recording time (ADR-0018). 192 MB limit |
 
 Topics are created only by `kafka-init`. Auto-creation is off, so a misspelt topic name
 fails instead of creating a new topic. `--if-not-exists` leaves an existing topic as it is:
@@ -40,9 +42,11 @@ on every stack.
 | --- | --- | --- |
 | Kafka | `kafka:9092` | `localhost:9094` |
 | Postgres | `postgres:5432` | `localhost:5432` |
+| metrics-api | `metrics-api:8000` | `localhost:8000` (OpenAPI docs at `/docs`) |
 
-Host ports bind to `127.0.0.1` only, so the release server never exposes Kafka or Postgres
-on its public interface, whatever the security group says.
+Host ports bind to `127.0.0.1` only, so the release server never exposes Kafka, Postgres or
+the API on its public interface, whatever the security group says. How the API reaches the
+internet is decided with the release stack (M2).
 
 ## Schemas and roles
 
@@ -79,11 +83,17 @@ Budgeted for the 2 GB release server:
 | `schedule-import` | 384 MB | runs once at start-up; peak ~65 MB on the real feed (COPY streaming), Postgres peaks ~210 MB meanwhile |
 | `ingest` | 256 MB | ~33 MB in fixtures mode |
 | `stop-event-processor` | 256 MB | ~46 MB in fixtures mode; librdkafka prefetch capped at 16 MB (`queued.max.messages.kbytes`) |
+| `metrics-jobs-apply` | 128 MB | runs once at start-up, then exits |
+| `metrics-api` | 192 MB | ~48 MB in fixtures mode (uvicorn, one worker, pool of up to 4 connections) |
 
-The limits of the long-running containers (kafka, postgres, ingest, stop-event-processor) add
-up to 1,792 MB, leaving ~250 MB for the OS if all of them reached their limits at once. Measured
+The limits of the long-running containers (kafka, postgres, ingest, stop-event-processor,
+metrics-api) add up to 1,984 MB, which leaves almost nothing for the OS if all of them reached
+their limits at once. The limits are ceilings, not use; actual use is far lower (below), but
+the next service (web, #10) has to come with lower limits elsewhere or a measured case for
+overcommitting. Measured
 use on 2026-11-19 (fixtures mode, #8) was ~700 MB in total: kafka ~550, postgres ~64, ingest ~33,
-processor ~46. A new service needs a limit that still fits next to these; check with
+processor ~46. With metrics-api (#9, 2026-11-19): ~800 MB in total, kafka ~568, postgres ~110,
+metrics-api ~48. A new service needs a limit that still fits next to these; check with
 `docker stats --no-stream` after adding anything.
 
 ## Resetting

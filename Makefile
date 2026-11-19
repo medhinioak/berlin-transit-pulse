@@ -4,7 +4,7 @@
 
 COMPOSE := docker compose -f deploy/compose/compose.yaml
 # Containers that run once and exit 0 (make up checks their exit codes).
-ONESHOTS := kafka-init schedule-import
+ONESHOTS := kafka-init schedule-import metrics-jobs-apply
 
 # Each package is type-checked on its own: every package has a tests/test_smoke.py,
 # and mypy rejects two modules with the same name in one run.
