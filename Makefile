@@ -3,6 +3,8 @@
 	fixtures tf-plan
 
 COMPOSE := docker compose -f deploy/compose/compose.yaml
+# Containers that run once and exit 0 (make up checks their exit codes).
+ONESHOTS := kafka-init schedule-import
 
 # Each package is type-checked on its own: every package has a tests/test_smoke.py,
 # and mypy rejects two modules with the same name in one run.
@@ -34,8 +36,14 @@ typecheck: ## mypy (strict) on every package
 # --wait returns while the one-shot containers are still running; `wait` blocks until they
 # finish and fails if one failed (topics created, schedule imported and active).
 up: ## Start Kafka, Postgres and the services; waits until healthy, topics and schedule exist
-	$(COMPOSE) up -d --build --wait
-	$(COMPOSE) wait kafka-init schedule-import
+	$(COMPOSE) up -d --build
+	@# `up --wait` fails when a one-shot exits, even with 0, so check their exit codes here
+	@# (`docker wait` works on running and stopped containers) and wait for the rest after.
+	@for s in $(ONESHOTS); do \
+	  code=$$(docker wait $$($(COMPOSE) ps -aq $$s)); \
+	  [ "$$code" = 0 ] || { echo "$$s exited with $$code"; exit 1; }; \
+	done
+	$(COMPOSE) up -d --wait $$($(COMPOSE) config --services | grep -vxF $(ONESHOTS:%=-e %))
 
 down: ## Stop the stack (keeps data; add -v by hand to reset volumes)
 	$(COMPOSE) down
