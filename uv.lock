@@ -177,10 +177,18 @@ version = "0.1.0"
 source = { editable = "services/stop-event-processor" }
 dependencies = [
     { name = "btp-common" },
+    { name = "confluent-kafka" },
+    { name = "gtfs-realtime-bindings" },
+    { name = "psycopg", extra = ["binary"] },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "btp-common", editable = "libs/common" }]
+requires-dist = [
+    { name = "btp-common", editable = "libs/common" },
+    { name = "confluent-kafka", specifier = ">=2.16.2" },
+    { name = "gtfs-realtime-bindings", specifier = ">=3.0.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.9" },
+]
 
 [[package]]
 name = "btp-schedule"

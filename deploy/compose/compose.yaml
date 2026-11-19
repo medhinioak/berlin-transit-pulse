@@ -145,8 +145,28 @@ services:
       - ../../fixtures/vbb-rt:/fixtures/vbb-rt:ro
     restart: unless-stopped
 
-  # Services are added here by their issues (schedule #5, processor #8, metrics-api #9,
-  # web #10). Pattern: like ingest above; services that read the schedule views also wait for
+  # Consumes trip-updates and keeps the latest prediction per trip and stop in events.*
+  # (services/stop-event-processor/README.md). Commits offsets only after the DB transaction.
+  stop-event-processor:
+    build:
+      context: ../..
+      dockerfile: services/stop-event-processor/Dockerfile
+    command: ["btp-processor"]
+    environment:
+      BTP_SERVICE_NAME: processor
+      BTP_KAFKA_BOOTSTRAP: kafka:9092
+      BTP_PG_HOST: postgres
+      BTP_PG_PROCESSOR_PASSWORD: ${BTP_PG_PROCESSOR_PASSWORD:-dev_processor}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # Services are added here by their issues (metrics-api #9, web #10). Pattern: like ingest
+  # above; services that read the schedule views also wait for
   #   schedule-import:
   #     condition: service_completed_successfully
 

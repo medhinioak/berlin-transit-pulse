@@ -1,9 +1,17 @@
 [project]
 name = "btp-processor"
 version = "0.1.0"
-description = "Stop-event processor: turns trip-update predictions into stop events."
+description = "Stop-event processor: keeps the latest prediction per trip and stop in Postgres."
 requires-python = ">=3.12"
-dependencies = ["btp-common"]
+dependencies = [
+    "btp-common",
+    "confluent-kafka>=2.16.2",
+    "gtfs-realtime-bindings>=3.0.0",
+    "psycopg[binary]>=3.3.9",
+]
+
+[project.scripts]
+btp-processor = "btp_processor.consumer:main"
 
 [tool.uv.sources]
 btp-common = { workspace = true }

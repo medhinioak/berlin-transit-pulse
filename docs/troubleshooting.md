@@ -103,6 +103,22 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 
 ## Tooling
 
+### `make up` hangs on "load metadata for docker.io/library/python:3.12-slim"
+
+- **Seen:** 2026-11-19, #8 (processor), first image build for the new service.
+- **Symptom:** `make up` (and `docker build`, `docker pull`) printed nothing for over 10
+  minutes; the build stopped at `load metadata`. The registry answered from the host
+  (`curl https://registry-1.docker.io/v2/` returned 401 in 0.4 s).
+- **Cause:** `docker-credential-desktop get` was waiting for a macOS Keychain prompt
+  ("allow access to the Docker credentials?"). Docker reads the Docker Hub login from Keychain
+  before every pull; a build started from a terminal or Claude Code just waits until the
+  prompt is answered. A Docker Desktop update changes the helper binary, so it asks again.
+- **Fix:** restarting Docker Desktop cleared it. To stop the prompts: answer them with
+  **Always Allow** (not Allow), or add `docker-credential-desktop` to the Access Control list
+  of the "Docker Credentials" items in Keychain Access. Only public images are pulled, so
+  `docker logout` (no stored login, nothing to ask for) also works.
+- **Status:** _workaround_
+
 ### Workspace packages don't import on macOS after `uv sync`
 
 - **Seen:** 2026-11-18, #2 (repo scaffolding), first `make install` on the Mac.
