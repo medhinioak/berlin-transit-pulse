@@ -8,6 +8,9 @@
 -- Running trip: in trip_state and not removed, not CANCELED, in Berlin, and its earliest
 --   predicted time <= now <= its latest predicted time (predicted time = departure_time,
 --   else arrival_time).
+-- Stops: only SCHEDULED ones count, for both the running window and the current delay.
+--   SKIPPED and NO_DATA stops carry predicted times but no delay, and the vehicle doesn't
+--   serve them (SKIPPED) or nothing is known (NO_DATA).
 -- Delays are in seconds, rounded to 0.1 s; percentiles are percentile_cont.
 -- Current delay: at the first stop (by stop_sequence) whose predicted time is >= now;
 --   departure_delay, else arrival_delay. NULL if that stop has neither.
@@ -68,6 +71,7 @@ running AS (
         ) x
         WHERE p.trip_id = b.trip_id
           AND p.service_date = b.service_date
+          AND p.stop_schedule_relationship = 'SCHEDULED'
     ) s
     WHERE NOT b.cancelled
       AND s.first_ts <= ref.at

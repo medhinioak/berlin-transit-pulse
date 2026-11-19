@@ -62,7 +62,7 @@ def trips() -> dict[str, list[str]]:
             return [r[0] for r in rows]
 
         return {
-            "bus": pick("bus", True, 8),
+            "bus": pick("bus", True, 9),
             "tram": pick("tram", True, 1),
             "outside": pick("bus", False, 1),
         }
@@ -110,6 +110,15 @@ def add_trip(
         )
 
 
+def skip(conn: Connection, trip_id: str, service_date: date, sequences: list[int]) -> None:
+    """Mark stops of a trip as SKIPPED."""
+    conn.execute(
+        """UPDATE events.stop_predictions SET stop_schedule_relationship = 'SKIPPED'
+           WHERE trip_id = %s AND service_date = %s AND stop_sequence = ANY(%s)""",
+        [trip_id, service_date, sequences],
+    )
+
+
 def view_rows() -> dict[str, dict[str, Any]]:
     """Read the view as btp_api at REF, keyed by mode."""
     with connect("btp_api", "BTP_PG_API_PASSWORD", "dev_api") as conn:
@@ -136,17 +145,23 @@ def test_running_trips_and_current_delay(
     add_trip(processor, bus[6], yesterday, [(at(-5), 0, None)], relationship="CANCELED")
     # Outside Berlin, running: left out.
     add_trip(processor, trips["outside"][0], D, [(at(-5), 900, None), (at(5), 900, None)])
+    # Next stop skipped: the current delay comes from the next served stop (90).
+    add_trip(processor, bus[7], D, [(at(-10), 30, None), (at(5), 0, None), (at(15), 90, None)])
+    skip(processor, bus[7], D, [2])
+    # Only skipped stops left: finished as far as served stops go, not running.
+    add_trip(processor, bus[8], D, [(at(-20), 30, None), (at(5), 0, None), (at(10), 0, None)])
+    skip(processor, bus[8], D, [2, 3])
     # Running, but no delay at all at the next stop: counted, delay unknown.
     add_trip(processor, trips["tram"][0], D, [(at(-5), 60, None), (at(5), None, None)])
 
     rows = view_rows()
     assert set(rows) == {"bus", "tram"}
     b = rows["bus"]
-    assert b["running_trips"] == 2
-    assert b["trips_with_nonzero_delay"] == 1
-    assert b["avg_delay_s"] == 30.0
-    assert b["p50_delay_s"] == 30.0
-    assert b["p95_delay_s"] == 57.0  # percentile_cont of [0, 60]
+    assert b["running_trips"] == 3  # bus[0], bus[1], bus[7]
+    assert b["trips_with_nonzero_delay"] == 2
+    assert b["avg_delay_s"] == 50.0  # [60, 0, 90]
+    assert b["p50_delay_s"] == 60.0
+    assert b["p95_delay_s"] == 87.0  # percentile_cont: 60 + 0.9 * (90 - 60)
     assert b["cancelled_trips_today"] == 1
     assert b["latest_feed_ts"] is not None
     t = rows["tram"]

@@ -52,6 +52,10 @@ definitions of ADR-0005 (M3). Don't present it as one.
 - **Now** is the session setting `btp.as_of` if set, else `now()`
   ([ADR-0018](../../docs/adr/0018-pin-the-reference-time-of-live-views-with-a-session-setting.md)).
   metrics-api sets it in fixtures mode to the recording time; in live mode it is `now()`.
+- **Stops**: only stops with `stop_schedule_relationship = 'SCHEDULED'` count, below. SKIPPED
+  and NO_DATA stops have predicted times but never a delay (live data, 2026-11-19: 2,918 and
+  228 of 184k stop rows). Counting them would give a NULL current delay when the next stop is
+  skipped, and could stretch a trip's running window.
 - **Running trip**: in `events.trip_state`, not removed, not `CANCELED`, in Berlin
   (`schedule.v_trips.in_berlin`), and the earliest predicted time of its stops <= now <=
   the latest one. Predicted time is `departure_time`, else `arrival_time`. Trips that haven't
@@ -113,5 +117,6 @@ make up && uv run pytest -m integration services/metrics-jobs
 
 The integration tests write hand-made trips as `btp_processor` on service days in 2030, pin
 `btp.as_of` there and read the view as `btp_api`. They cover trips past midnight, not started,
-finished, removed, cancelled today and yesterday, outside Berlin, the arrival-delay fallback,
+finished, removed, cancelled today and yesterday, outside Berlin, skipped stops, the
+arrival-delay fallback,
 a trip with no delay, a mode with only cancellations, and re-applying the SQL.
