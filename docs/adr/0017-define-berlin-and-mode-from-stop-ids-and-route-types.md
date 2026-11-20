@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-18
-- Decider: Medhini
+- Decider: Maintainer (@medhinioak)
 - Review: rule set in issue #5, verified against the real feed in the same issue, 2026-11-18
 
 ## Context

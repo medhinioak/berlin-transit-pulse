@@ -4,6 +4,7 @@ Live reliability metrics for Berlin public transport (on-time rate, delays, canc
 headway regularity per line, stop and hour), built from VBB's open GTFS-Realtime feed.
 Python microservices, Kafka (single broker, KRaft), Postgres, Parquet on S3, Terraform on AWS.
 
+Docs index: docs/README.md. Spec: docs/spec.md. Architecture: docs/architecture.md.
 Plan, scope and milestones: docs/plan.md. Decisions: docs/adr/. Process: docs/process.md.
 Problems hit and their fixes: docs/troubleshooting.md. Ideas not in the plan: docs/parking-lot.md.
 Tasks: GitHub Issues, one milestone per release (M1–M5, Alternatives, After launch).
@@ -70,8 +71,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 
 ## Code quality
 
-- **Simplicity:** readable code, no abstractions for hypothetical future needs. This is a
-  solo, part-time project; prefer the boring option.
+- **Simplicity:** readable code, no abstractions for hypothetical future needs. The team is
+  small and part-time; prefer the boring option.
 - **Types and docstrings:** type hints on every function; a one-line docstring on every
   public function, class and module. mypy and ruff pass without blanket ignores.
 - **Docs first:** a feature or architectural change has an issue with acceptance criteria,
@@ -89,7 +90,7 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 
 - All AWS resources come from Terraform in deploy/terraform/. No console changes except
   the account baseline (MFA, admin IAM user, budgets; docs/aws-account.md).
-- Claude Code never runs terraform apply or terraform destroy. Medhini applies after
+- Claude Code never runs terraform apply or terraform destroy. A maintainer applies after
   reading the plan; the plan output goes in the PR.
 - Tag every resource Project=berlin-transit-pulse and Stack=release|poc.
 - Budget: release under €20/month. A change that adds monthly cost states the estimated

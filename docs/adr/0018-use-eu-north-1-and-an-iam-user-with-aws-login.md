@@ -2,8 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-19
-- Decider: Medhini
-- Review: Claude project chat "Transport reliability tracker", 2026-11-18
+- Decider: Maintainer (@medhinioak)
+- Review: planning discussion during the account setup, 2026-11-18 (held outside the repository; the reasons are in this ADR and in `docs/aws-account.md`)
 
 ## Context
 
@@ -19,8 +19,8 @@ with $100 in credits. Two constraints came up during setup:
 
 ## Decision
 
-Use `eu-north-1` for every regional resource. Use an IAM user (`medhini`, group `admins`,
-MFA, no access keys) for console work, and `aws login --profile btp` for short-lived CLI
+Use `eu-north-1` for every regional resource. Use a named IAM user for the maintainer (group
+`admins`, MFA, no access keys) for console work, and `aws login --profile btp` for short-lived CLI
 credentials. Details in [`docs/aws-account.md`](../aws-account.md).
 
 ## Alternatives considered

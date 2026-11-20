@@ -2,8 +2,8 @@
 
 - Status: Proposed | Accepted | Superseded by ADR-NNNN
 - Date: YYYY-MM-DD
-- Decider: Medhini
-- Review: who reviewed the decision (for example Claude project chat, a second model), YYYY-MM-DD
+- Decider: role and GitHub handle, for example Maintainer (@medhinioak)
+- Review: who or what reviewed the decision (a person, a second model) and where the discussion is recorded (issue or pull request), YYYY-MM-DD
 
 ## Context
 

@@ -42,7 +42,7 @@ Identity Center when the account moves to the Paid plan.
 | Item | Setting |
 | --- | --- |
 | Root user | MFA on. Used only for billing and account settings |
-| Admin user | IAM user `medhini` with console access and MFA, in group `admins` (`AdministratorAccess` policy). **No access keys** |
+| Admin user | One named IAM user for the maintainer (written `<admin-user>` below) with console access and MFA, in group `admins` (`AdministratorAccess` policy). **No access keys** |
 | Billing preferences | Free Tier usage alerts and invoices by email |
 | Budget | Monthly cost budget, **credits excluded** so alerts show real usage. Alerts at $5 and $15 (actual) and $20 (actual and forecasted) |
 | Cost Anomaly Detection | Monitor for AWS services, email alert above $3 |
@@ -53,8 +53,8 @@ Identity Center when the account moves to the Paid plan.
 Needs AWS CLI v2.32.0 or later (`aws --version`).
 
 ```bash
-aws login --profile btp                     # browser sign-in as medhini; region eu-north-1
-aws sts get-caller-identity --profile btp   # should show user/medhini, not root
+aws login --profile btp                     # browser sign-in as <admin-user>; region eu-north-1
+aws sts get-caller-identity --profile btp   # should show user/<admin-user>, not root
 ```
 
 Run `aws login --profile btp` again when the session expires. The resulting `~/.aws/config`
@@ -62,7 +62,7 @@ entry looks like this (placeholders, not real values):
 
 ```ini
 [profile btp]
-login_session = arn:aws:iam::<account-id>:user/medhini
+login_session = arn:aws:iam::<account-id>:user/<admin-user>
 region = eu-north-1
 ```
 
@@ -70,12 +70,21 @@ Terraform and other SDK tools pick up the same profile with `AWS_PROFILE=btp`.
 
 ## Rules
 
-- Claude Code never runs `aws` commands, `terraform apply` or `terraform destroy`
-  (denied in `.claude/settings.json`). Medhini runs them after reading the plan.
+- AI coding agents (Claude Code) never run `aws` commands, `terraform apply` or
+  `terraform destroy` (denied in `.claude/settings.json`). A maintainer runs them after
+  reading the plan.
 - No console changes beyond this baseline. Everything else is Terraform under
   `deploy/terraform/`.
 - No long-lived access keys, for the admin user or anything else. GitHub Actions will use
   OIDC (M2).
+
+## Access for additional people
+
+Not defined yet. Today only the maintainer has access to the account. Service work needs no
+AWS access: contributors send Terraform changes with the `terraform plan` output in the pull
+request and the maintainer applies them. Before an external developer needs AWS access, decide
+between scoped IAM users in a group and moving to IAM Identity Center on the Paid plan (see
+"Later"), and record the choice in an ADR.
 
 ## Free plan timeline
 
