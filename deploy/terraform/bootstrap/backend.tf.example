@@ -1,0 +1,16 @@
+# Rename to backend.tf after the first apply, then migrate the local state into the bucket:
+#
+#   terraform -chdir=deploy/terraform/bootstrap init -migrate-state \
+#     -backend-config="bucket=$(terraform -chdir=deploy/terraform/bootstrap output -raw state_bucket_name)"
+#
+# The bucket name is left out on purpose (partial configuration): it contains the AWS
+# account ID, which stays out of the repository. See deploy/terraform/README.md.
+terraform {
+  backend "s3" {
+    key          = "bootstrap/terraform.tfstate"
+    region       = "eu-north-1"
+    profile      = "btp"
+    encrypt      = true
+    use_lockfile = true
+  }
+}

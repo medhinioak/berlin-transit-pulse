@@ -18,7 +18,7 @@ need is missing, that is a bug: open an issue.
 | If you are… | Read |
 | --- | --- |
 | **A developer joining the project** | [process](process.md) (onboarding), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CLAUDE.md`](../CLAUDE.md) for the working rules, [glossary](glossary.md), [troubleshooting](troubleshooting.md), [compose stack](../deploy/compose/README.md), [fixtures](../fixtures/README.md) |
-| **A reviewer or auditor** | [spec](spec.md), [architecture](architecture.md) (design rules, security and access, known limitations), [ADRs](adr/README.md), [risks](risks.md), [cost](cost.md), [AWS account](aws-account.md), [data sources and licensing](data-sources.md) |
+| **A reviewer or auditor** | [spec](spec.md), [architecture](architecture.md) (design rules, security and access, known limitations), [ADRs](adr/README.md), [risks](risks.md), [cost](cost.md), [AWS account](aws-account.md), [Terraform stacks](../deploy/terraform/README.md), [data sources and licensing](data-sources.md) |
 | **Planning or managing delivery** | [plan](plan.md), [risks](risks.md), [cost](cost.md), [parking lot](parking-lot.md), [alternatives track](alternatives.md) |
 | **Operating the system** | [architecture](architecture.md#observability-and-alerting), [AWS account](aws-account.md), [troubleshooting](troubleshooting.md); a runbook arrives with M2 |
 
@@ -48,6 +48,7 @@ Service and component documentation lives next to the code:
 [metrics-api](../services/metrics-api/README.md),
 [Kafka message contracts](../schemas/README.md),
 [compose stack](../deploy/compose/README.md),
+[Terraform stacks](../deploy/terraform/README.md),
 [fixtures](../fixtures/README.md).
 
 ## Conventions
