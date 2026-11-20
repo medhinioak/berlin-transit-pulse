@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-19
-- Decider: Medhini
+- Decider: Maintainer (@medhinioak)
 - Review: options compared in the Claude Code session for #9, 2026-11-19
 
 ## Context

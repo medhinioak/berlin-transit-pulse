@@ -1,92 +1,136 @@
-# Plan
+# Project plan: milestones and delivery
 
-The full planning document (architecture trade-offs, costs, risks, diagrams) lives in the
-Claude project "Transport reliability tracker". This file is the working copy for the repo:
-what Claude Code and contributors need to stay in scope. Changes to scope or milestones
-are made here through a PR.
+When each part of the product ships, what "done" means for each release and what is cut first
+if time runs short. Scope is in [`spec.md`](spec.md), the design in
+[`architecture.md`](architecture.md). Changes to scope or milestones are made here through a
+pull request.
 
-## Goal
+## How delivery is planned
 
-A live, commuter-first reliability tracker for Berlin public transport. BVG publishes
-per-line punctuality only once a year; this answers, continuously: is my line reliable at
-the time I travel, is it worse than usual right now, and which stop or hour is the problem.
-Secondary readers are journalists and transit advocates; hiring managers are reached
-through the README and blog.
+- Work is organised in five milestones, M1 to M5, each a tagged release with exit criteria. A
+  milestone is done when its criteria are met, not when its date passes. The dates are targets.
+- Capacity is one part-time maintainer, so there are no weekly plans. Milestones, not
+  sprints, are the planning unit ([process](process.md)).
+- Only M2 is time-sensitive: every day earlier that collection starts is one more day of
+  history at launch. v1.0 needs at least 5 weeks of continuous history.
+- Tasks are GitHub issues, one GitHub milestone per release plus "Alternatives" and
+  "After launch". **GitHub is the source of truth for status**; the table below is a snapshot.
 
-## Constraints
+## Status snapshot, 2026-11-20
 
-- Solo and part-time; work is sporadic, so milestones have target dates, not weekly plans.
-- Cloud budget under €20/month for the release. AWS, Terraform.
-- One region: Berlin. Data source: VBB's official GTFS-RT feed (CC-BY 4.0, 7 requests/min)
-  joined with VBB's static GTFS.
-
-## v1 scope
-
-- Ingestion every 30 s; each update matched to its scheduled trip and stop.
-- Per line, stop, hour of day and weekday type: on-time rate (each operator's own
-  definition), average and p95 delay, cancellation rate, headway regularity for frequent lines.
-- "Right now vs normal" view, line pages with history, network overview, degradation banner.
-- Ops alerts: feed stale, match rate low, consumer lag, disk and memory.
-- Methodology page with definitions, data gaps and attribution.
-- Modes: bus, tram, U-Bahn, S-Bahn and regional rail within Berlin. S-Bahn confirmed
-  on 2026-11-18 from rush-hour feed data (issue #1); coverage per mode is monitored from M3.
-
-## Non-goals for v1
-
-- Journey planning, departure boards, live vehicle maps (the feed has no positions).
-- Delay prediction or ML.
-- Push notifications or accounts for public users.
-- Brandenburg and other regions.
-- High availability: single broker, single database, documented as such.
-- A native app (mobile-first website instead).
-
-## Architecture (release)
-
-One EC2 t4g.small running docker compose; S3 for raw snapshots, Parquet history and
-backups; CloudFront for the web UI and API.
-
-| Service | Owns | Reads from → writes to |
-| --- | --- | --- |
-| ingest-service | Polling, diffing, raw snapshots | VBB feed → Kafka `trip-updates`, S3 |
-| stop-event-processor | Turning predictions into finalised stop events | Kafka → Postgres `events` |
-| schedule-service | Static GTFS import and versions | VBB static zip → Postgres `schedule` |
-| metrics-jobs | dbt models, data-quality checks, Parquet export | Postgres → Postgres `marts`, S3 |
-| metrics-api | Read-only API | Postgres `marts` (read-only role) |
-| web | Commuter UI | metrics-api via CloudFront |
-
-Kafka: single broker in KRaft mode, topic `trip-updates` keyed by trip ID + service date,
-6 partitions, 24 h retention. Only changed trips are published. Batch jobs run on systemd
-timers. Monitoring: CloudWatch metrics and alarms, healthchecks.io for the poller.
-
-Other deployment targets (same images): a microservices proof of concept on ECS Fargate +
-MSK Serverless + RDS, applied for a few hours and destroyed; a Helm chart tested on kind in CI.
-Neither is part of the release.
+| Milestone | Release | Target | Issues closed / open | State |
+| --- | --- | --- | --- | --- |
+| M1 Walking skeleton | v0.1 | 2026-11-30 | 15 / 3 | Open: #10 minimal web page, #13 Terraform state bucket, #14 tag v0.1 |
+| M2 Collecting 24/7 in AWS | v0.2 | 2026-12-07 | 0 / 8 | Not started |
+| M3 Trustworthy metrics | v0.3 | 2026-12-21 | 0 / 10 | Not started |
+| M4 Public beta | v0.9 | 2027-01-10 | 0 / 8 | Not started |
+| M5 v1.0 launch | v1.0 | 2027-01-17 | 0 / 6 | Not started |
+| Alternatives (optional) | none | after M3 | 0 / 12 | Not started |
+| After launch | none | after v1.0 | 0 / 4 | Not started |
 
 ## Milestones
 
-A milestone is done when its exit criteria are met, not when its date passes. Issues
-for each milestone are in GitHub.
+### M1 Walking skeleton: v0.1, target 2026-11-30
 
-| Milestone | Release | Target | Exit criteria |
-| --- | --- | --- | --- |
-| M1 Walking skeleton | v0.1 | 2026-11-30 | `make up` runs poller → Kafka → consumer → Postgres → API → page locally; services each have their own folder, Dockerfile and tests; fixtures recorded; AWS account baseline done |
-| M2 Collecting 24/7 in AWS | v0.2 | 2026-12-07 | Release stack applied with Terraform; CI/CD deploys via SSM; raw snapshots in S3; public URL with live counts; memory measured |
-| M3 Trustworthy metrics | v0.3 | 2026-12-21 | Stop events finalised and tested on edge cases; GTFS refresh survives the 2026-12-13 timetable change; data-quality checks, status page, alarms; per-line metrics live; ADRs 1–5 |
-| M4 Public beta | v0.9 | 2027-01-10 | dbt models with tests; Parquet export; commuter UI with line pages; methodology page |
-| M5 v1.0 launch | v1.0 | 2027-01-17 | Metrics validated against outside references; rebuild from zero timed; cost under €20/month; README and ADR index |
+A thin version of the whole pipeline runs locally.
 
-Cut first if behind (in this order): stop-level metrics → headway regularity → degradation
-banner → dbt (plain SQL instead). Never cut: 24/7 collection, data-quality checks, line pages.
+- `make up` runs poller, Kafka, consumer, Postgres, API and one page showing the current average
+  delay by mode (#10).
+- Each service has its own folder, Dockerfile and tests (#2, #3, #5, #6, #7, #8, #9).
+- Static GTFS import, and recorded feed snapshots as test fixtures (#4, #5).
+- CI on every push (#11).
+- AWS account baseline: MFA on root, admin user, budgets at $5, $15 and $20 (#12), and the
+  Terraform state bucket (#13). See [`aws-account.md`](aws-account.md).
 
-Not on the critical path: alternative implementations (milestone "Alternatives", start
-after M3) and the demo video and blog posts (milestone "After launch").
+### M2 Collecting 24/7 in AWS: v0.2, target 2026-12-07
 
-## Definition of done for v1.0
+- Terraform release stack: EC2 with an Elastic IP and a reverse DNS name, S3 with lifecycle
+  rules, IAM, SSM and CloudFront (#15, #16, #17).
+- GitHub Actions: tests, arm64 images to GHCR, deploy through SSM (#18).
+- Raw snapshots every 5 minutes to S3 (#19). Memory use measured on the real server (#20).
+- Fixtures mode survives the timetable change (#75).
+- Public URL showing live counts (#21).
+- A runbook for deploy, roll back, restore and shut down.
 
-- [ ] Public URL live, with at least 5 weeks of continuous history
-- [ ] Ingestion captured at least 95% of polls over the last 7 days, per the project's own monitoring
-- [ ] Metrics checked against BVG's published yearly figures and spot checks against live departures
-- [ ] Whole stack rebuilt from zero with Terraform in under 30 minutes
-- [ ] CI runs unit tests, recorded-feed tests and data-quality checks on every push
-- [ ] Monthly AWS cost under €20, shown from Cost Explorer
-- [ ] README and at least 5 ADRs published
+### M3 Trustworthy metrics: v0.3, target 2026-12-21
+
+- Stop events finalised with the grace window, cancellations and idempotent upserts, tested on
+  recorded feeds including the edge cases (#22, #23).
+- Static GTFS refresh survives the timetable change on 2026-12-13 (#24). Rehearse it beforehand
+  if M2 is done in time.
+- Data-quality checks and a status page (#25), CloudWatch alarms and consumer lag (#26),
+  healthchecks.io (#27), nightly `pg_dump` (#28).
+- Per-line on-time rate, p50 and p95 delay and cancellations live (#29).
+- ADRs 1–5 written (#30). Tag v0.3 (#31).
+
+### M4 Public beta: v0.9, target 2027-01-10
+
+- dbt models for line by hour by weekday type, and stop level, with tests (#32).
+- Headway regularity for frequent lines (#33).
+- Nightly Parquet export to S3, partitioned by date and mode (#34).
+- API history endpoints (#35).
+- Commuter UI: line search and line page with "Right now vs normal" and the heatmap (#36),
+  network overview and degradation banner (#37), methodology page with attribution and data
+  gaps (#38).
+- Tag v0.9 (#39).
+
+### M5 v1.0 launch: v1.0, target 2027-01-17
+
+- Metrics validated against BVG's yearly figures and live departures (#40).
+- Rebuild from zero with Terraform, timed (#41).
+- Cost review and CloudFront cache rules (#42).
+- README and ADR index (#43), remaining ADRs 6–13 (#44).
+- The [definition of done](spec.md#definition-of-done-for-v10) is met. Tag v1.0 (#45).
+
+## Cut list
+
+If the schedule slips, cut in this order: stop-level metrics, then headway regularity, then the
+degradation banner, then dbt (fall back to plain SQL views).
+
+**Never cut:** 24/7 collection, data-quality checks and the line page.
+
+## Not on the critical path
+
+- **Alternatives track** (GitHub milestone "Alternatives", #46–#57): optional implementations
+  of the same pipeline on other technologies. Starts after M3, once there is real code to port.
+  See [`alternatives.md`](alternatives.md).
+- **After launch** (#58–#61): a short demo video and written findings. They do not gate v1.0.
+
+## Content of the public launch material
+
+Lead with what commuters learn, then show the engineering with real numbers: uptime, lag, cost
+and what broke. Every figure comes from the pipeline, never from an estimate.
+
+**README** (#43)
+
+- One-line pitch, live link, a screenshot of a line page.
+- The three commuter questions, with example answers from real data.
+- Architecture diagram and a one-paragraph walk through the data path.
+- Data sources and CC-BY attribution, with a link to the methodology page.
+- How to run it locally: `docker compose up` replays recorded snapshots, so no network or API
+  key is needed.
+- Operations: what is monitored, alert thresholds, measured uptime and monthly cost.
+- ADR index, known limitations and what a production version would change.
+- Repository layout, tests, CI badge and licence.
+
+**Demo video, about 3 minutes** (#58)
+
+1. A commuter question answered on a real line page: "Right now vs normal" and the heatmap.
+2. The data path live: a snapshot arriving, change events in Kafka, a finalised stop event in
+   Postgres.
+3. A simulated stale feed setting off the data-quality alarm and the email.
+4. The whole stack rebuilt from zero with Terraform.
+
+**Written findings**
+
+1. For commuters, the main one (#59): which Berlin lines are reliable at rush hour, after N
+   weeks of live data. Findings first, method linked.
+2. For engineers (#60): turning a 10 MB snapshot every 30 seconds into a stream of changes
+   (diffing, Kafka keys, late and duplicate events, idempotency, the memory budget on 2 GB).
+3. Later (#61): a cost post, either the move from RDS to self-hosted Postgres (if credits are
+   used) or archiving the live system into static history.
+
+## Architecture decision records
+
+ADRs 1–5 are written during M3 while the reasons are fresh, and the rest by M5. ADRs 14–16 wait
+until the proof of concept is built. The list and its status are in [`adr/README.md`](adr/README.md).

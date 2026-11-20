@@ -111,8 +111,8 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
   (`curl https://registry-1.docker.io/v2/` returned 401 in 0.4 s).
 - **Cause:** `docker-credential-desktop get` was waiting for a macOS Keychain prompt
   ("allow access to the Docker credentials?"). Docker reads the Docker Hub login from Keychain
-  before every pull; a build started from a terminal or Claude Code just waits until the
-  prompt is answered. A Docker Desktop update changes the helper binary, so it asks again.
+  before every pull; a build started from a terminal or by an AI coding agent just waits until
+  the prompt is answered. A Docker Desktop update changes the helper binary, so it asks again.
 - **Fix:** restarting Docker Desktop cleared it. To stop the prompts: answer them with
   **Always Allow** (not Allow), or add `docker-credential-desktop` to the Access Control list
   of the "Docker Credentials" items in Keychain Access. Only public images are pulled, so
@@ -121,17 +121,17 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 
 ### Workspace packages don't import on macOS after `uv sync`
 
-- **Seen:** 2026-11-18, #2 (repo scaffolding), first `make install` on the Mac.
+- **Seen:** 2026-11-18, #2 (repo scaffolding), first `make install` on macOS.
 - **Symptom:** `uv pip list` shows all `btp-*` packages installed, but
   `uv run python -c "import btp_common"` fails with `ModuleNotFoundError`.
 - **Cause:** macOS had set the `hidden` file flag (`ls -lO`) on most of the editable
   `.pth` files in `.venv/lib/python3.12/site-packages/`. Python 3.12.13 skips hidden
   `.pth` files, so the `src/` paths never reach `sys.path`. The repo was under `~/Documents`,
   which iCloud Drive syncs (Desktop & Documents), and iCloud sets that flag.
-- **Fix:** keep the repo outside iCloud-synced folders (`~/Documents`, `~/Desktop`). It now
-  lives in `~/Code`. After moving a clone, delete `.venv` and run `make install` again: the
+- **Fix:** keep the repo outside iCloud-synced folders (`~/Documents`, `~/Desktop`), for example
+  in `~/Code`. After moving a clone, delete `.venv` and run `make install` again: the
   scripts in `.venv/bin` keep the old path in their shebang, and `uv sync` doesn't rewrite them.
   Also unset a `VIRTUAL_ENV` that still points at the old path. If an old clone has to stay in
   iCloud, `chflags -R nohidden .venv` after each sync clears the flag.
-- **Status:** _fixed_ (repo moved to `~/Code`, 2026-11-18); the `chflags` step was removed
+- **Status:** _fixed_ (clone moved out of iCloud Drive, 2026-11-18); the `chflags` step was removed
   from `make install`

@@ -7,7 +7,7 @@ Closes #
 ## How it was checked
 
 - [ ] CI is green (ruff, mypy, tests on fixtures)
-- [ ] I read the full diff myself
+- [ ] The author read the full diff
 - [ ] Docs, ADRs or `CLAUDE.md` updated if behaviour, rules or decisions changed
 - [ ] Infrastructure change: `terraform plan` output below, and the monthly cost change: € …
 - [ ] Kafka topic, key or schema change: consumers checked, replay still idempotent
@@ -15,6 +15,6 @@ Closes #
 
 ## AI involvement
 
-- Author: [ ] me  [ ] Claude Code
+- Author: [ ] human  [ ] AI assistant (Claude Code)
 - Reviews: [ ] `/code-review`  [ ] independent review (other model or fresh session)
 - Every review comment is fixed or answered: [ ]

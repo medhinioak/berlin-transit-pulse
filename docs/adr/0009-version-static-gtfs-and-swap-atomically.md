@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-18
-- Decider: Medhini
+- Decider: Maintainer (@medhinioak)
 - Review: decisions taken in issue #5; implementation reviewed with Claude Code `/code-review`,
   2026-11-18
 
