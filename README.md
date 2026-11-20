@@ -86,7 +86,7 @@ keep the clone outside iCloud-synced folders such as `~/Documents`
 | `schemas/` | Kafka message contracts |
 | `fixtures/` | Recorded feed snapshots and a small static GTFS used by all tests |
 | `deploy/` | Docker Compose stack and, from M2, Terraform |
-| `web/` | Commuter UI (not started) |
+| `web/` | Commuter UI (minimal live page, http://localhost:8080 after `make up`) |
 | `docs/` | Documentation |
 
 ## Documentation

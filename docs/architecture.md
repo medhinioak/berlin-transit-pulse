@@ -69,7 +69,7 @@ proof of concept differ only in their Terraform.
 | [`schedule`](../services/schedule/README.md) | Static GTFS import, versions, Berlin and mode flags | VBB static zip → Postgres `schedule` | **Built** (#5): versioned import with atomic swap. Weekly refresh and pruning: planned M3 (#24) |
 | [`metrics-jobs`](../services/metrics-jobs/README.md) | Metric models, data-quality checks, Parquet export | Postgres `events`, `schedule` → Postgres `marts`; S3 | **Started** (#9): two plain SQL views. Data quality M3 (#25), metrics M3 (#29), dbt M4 (#32), Parquet M4 (#34) |
 | [`metrics-api`](../services/metrics-api/README.md) | Read-only HTTP API for the UI | Postgres `marts` (read-only role) | **Built** (#9): `/health`, `/v1/now/by-mode`. History endpoints: planned M4 (#35) |
-| `web` | Static, mobile-first commuter UI | metrics-api, through CloudFront | **Not started**: minimal page M1 (#10), full UI M4 (#36, #37, #38) |
+| [`web`](../web/) | Static, mobile-first commuter UI | metrics-api, through CloudFront | **Started** (#10): one live page (plain HTML, CSS, JS) served by nginx in compose, `/api/` proxied to metrics-api. Full UI M4 (#36, #37, #38) |
 | `libs/common` | Settings, JSON logging, fixture loading | n/a | **Built** |
 
 ## Technology choices
@@ -271,7 +271,7 @@ A runbook (deploy, roll back, restore, shut down) is created with the release st
 | `fixtures/` | Recorded feed snapshots and a mini static GTFS, shared by all tests | Built |
 | `scripts/` | Fixture recording and trimming | Built |
 | `deploy/compose/` | The compose stack (local and release) | Built |
-| `web/` | Commuter UI | Placeholder |
+| `web/` | Commuter UI | Minimal page (M1) |
 | `deploy/terraform/release/` | EC2 release stack, applied | Planned (M2) |
 | `deploy/terraform/aws-microservices/` | Proof of concept, applied then destroyed | Planned (alternatives) |
 | `deploy/terraform/eks/` | EKS module, plan only | Planned (alternatives) |

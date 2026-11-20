@@ -23,7 +23,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Schedule versions: uv run btp-schedule status | import [--file PATH] [--activate] | activate ID
   (services/schedule/README.md)
 - Marts views: uv run btp-metrics-jobs apply-sql (services/metrics-jobs/README.md). API: make up
-  serves http://localhost:8000 (/docs, /health, /v1/now/by-mode; services/metrics-api/README.md)
+  serves http://localhost:8000 (/docs, /health, /v1/now/by-mode; services/metrics-api/README.md).
+  Web page: make up serves http://localhost:8080 (web/, nginx; deploy/compose/README.md)
 - Tests: make test (unit, with coverage; one test:
   uv run pytest services/ingest/tests/test_smoke.py::test_package_imports)
 - Integration tests: make test-integration (needs make up)
