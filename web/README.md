@@ -32,7 +32,7 @@ and `styles.css` are cached for 5 minutes, so force-reload after changing them.
   trips (normal at night; otherwise the feed may be incomplete) instead of showing zeros.
 
 A dash means the API has no value (e.g. no running trip with a known delay). The page never
-computes figures except the "Delayed" share (`trips_with_nonzero_delay / running_trips`) and
+computes figures except the "Off schedule" share (`trips_with_nonzero_delay / running_trips`) and
 the unit change to minutes.
 
 ## Checks
