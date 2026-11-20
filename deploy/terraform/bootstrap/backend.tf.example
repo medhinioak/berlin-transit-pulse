@@ -1,15 +1,17 @@
-# Rename to backend.tf after the first apply, then migrate the local state into the bucket:
+# After the first apply, read the bucket name (before the rename: once backend.tf exists,
+# every command but init fails), rename this file to backend.tf and migrate the state:
 #
-#   terraform -chdir=deploy/terraform/bootstrap init -migrate-state \
-#     -backend-config="bucket=$(terraform -chdir=deploy/terraform/bootstrap output -raw state_bucket_name)"
+#   BUCKET=$(terraform -chdir=deploy/terraform/bootstrap output -raw state_bucket_name)
+#   git mv deploy/terraform/bootstrap/backend.tf.example deploy/terraform/bootstrap/backend.tf
+#   terraform -chdir=deploy/terraform/bootstrap init -migrate-state -backend-config="bucket=$BUCKET"
 #
+# No profile here: locally AWS_PROFILE=btp selects it, CI uses OIDC credentials.
 # The bucket name is left out on purpose (partial configuration): it contains the AWS
 # account ID, which stays out of the repository. See deploy/terraform/README.md.
 terraform {
   backend "s3" {
     key          = "bootstrap/terraform.tfstate"
     region       = "eu-north-1"
-    profile      = "btp"
     encrypt      = true
     use_lockfile = true
   }

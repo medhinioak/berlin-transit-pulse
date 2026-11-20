@@ -85,12 +85,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
 
     filter {}
 
+    # Keep the last 5 versions however old, so a rarely touched stack keeps its backups.
     noncurrent_version_expiration {
-      noncurrent_days = 90
+      noncurrent_days           = 90
+      newer_noncurrent_versions = 5
     }
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
+    }
+  }
+
+  # Each lock release (use_lockfile) leaves a delete marker on the .tflock key.
+  rule {
+    id     = "remove-expired-delete-markers"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      expired_object_delete_marker = true
     }
   }
 
