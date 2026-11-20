@@ -204,7 +204,7 @@ services:
     depends_on:
       metrics-jobs-apply:
         condition: service_completed_successfully
-    mem_limit: 192m
+    mem_limit: 128m
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -229,7 +229,29 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Services are added here by their issues (web #10). Pattern: like ingest above; services
+  # Static page web/ and a proxy from /api/ to metrics-api (#10). Starts and keeps serving
+  # while metrics-api is down; the page then shows its error state.
+  web:
+    image: nginx:1.30.6-alpine
+    depends_on:
+      metrics-api:
+        condition: service_started
+    mem_limit: 64m
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../../web:/usr/share/nginx/html:ro
+      - ./web/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      start_period: 10s
+      start_interval: 1s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Services are added here by their issues. Pattern: like ingest above; services
   # that read the schedule views also wait for
   #   schedule-import:
   #     condition: service_completed_successfully

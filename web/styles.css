@@ -1,0 +1,198 @@
+/* Minimal live page (#10). Mobile first, light and dark, no animation. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --text: #1a1a1a;
+  --muted: #545454;
+  --border: #c4c4c4;
+  --row-alt: #f4f4f4;
+  --link: #0b57d0;
+  --focus: #0b57d0;
+  --stale-bg: #fff4ce;
+  --stale-text: #4d3800;
+  --error-bg: #fde7e9;
+  --error-text: #8a1c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --text: #ececec;
+    --muted: #b3b3b3;
+    --border: #4a4a4a;
+    --row-alt: #1d1d1d;
+    --link: #8ab4f8;
+    --focus: #8ab4f8;
+    --stale-bg: #3a2e00;
+    --stale-text: #ffe08a;
+    --error-bg: #3b1214;
+    --error-text: #ffb3b8;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+main,
+footer {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1rem 0.75rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 0.5rem 0;
+}
+
+.lede,
+.updated,
+.notes,
+.notes-caveat,
+footer {
+  color: var(--muted);
+}
+
+.status {
+  margin: 1rem 0;
+}
+
+/* Kept in the page when empty, so the live region is announced when it fills. */
+.status:empty {
+  margin: 0;
+}
+
+.status-stale,
+.status-error {
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+}
+
+.status-stale {
+  background: var(--stale-bg);
+  color: var(--stale-text);
+}
+
+.status-error {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Scrolls sideways only if a very narrow screen can't fit the table. */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 0.5rem;
+}
+
+th,
+td {
+  padding: 0.5rem 0.1875rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: bottom;
+}
+
+thead th {
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--row-alt);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.notes {
+  margin: 1.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.notes dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notes dd {
+  margin: 0 0 0.5rem;
+}
+
+.notes-caveat {
+  font-size: 0.875rem;
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+footer p {
+  margin: 0.25rem 0;
+}
+
+a {
+  color: var(--link);
+}
+
+a:focus-visible,
+.table-wrap:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (min-width: 40rem) {
+  main,
+  footer {
+    padding: 1rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  table {
+    font-size: 0.9375rem;
+  }
+
+  th,
+  td {
+    padding: 0.5rem 0.75rem;
+  }
+
+  thead th {
+    font-size: 0.9375rem;
+  }
+}

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Trips running now on Berlin public transport and their current delay, by mode. Live data, refreshed every minute.">
+  <title>Berlin transit right now</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Berlin transit right now</h1>
+    <p class="lede">
+      Trips running in Berlin at this moment and their current delay, by mode.
+      Live data, refreshed every minute.
+    </p>
+
+    <p id="status" class="status" role="status">Loading live data…</p>
+    <p id="updated" class="updated" hidden>
+      Data from <time id="as-of-time"></time> Berlin time
+      (<span id="as-of-age"></span>).
+    </p>
+
+    <div id="results" hidden>
+      <div class="table-wrap" role="region" aria-labelledby="table-caption" tabindex="0">
+        <table>
+          <caption id="table-caption">Trips running now by mode</caption>
+          <thead>
+            <tr>
+              <th scope="col">Mode</th>
+              <th scope="col" class="num">Trips running</th>
+              <th scope="col" class="num">Average delay (min)</th>
+              <th scope="col" class="num">Delayed</th>
+              <th scope="col" class="num">Cancelled today</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="empty" hidden>
+        The live data has no trips running in Berlin right now. That is normal late at night;
+        at other times the live feed may be incomplete.
+      </p>
+
+      <dl class="notes">
+        <dt>Trips running</dt>
+        <dd>Trips in Berlin between their first and last stop right now.</dd>
+        <dt>Average delay</dt>
+        <dd>Mean current delay of the running trips. Negative means early.</dd>
+        <dt>Delayed</dt>
+        <dd>Share of running trips whose current delay is not zero, early or late.</dd>
+        <dt>Cancelled today</dt>
+        <dd>Trips of today's service day cancelled in the live feed.</dd>
+      </dl>
+      <p class="notes-caveat">
+        This is a live snapshot, not a punctuality rate. A dash means there is no value.
+      </p>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH,
+      <a href="https://creativecommons.org/licenses/by/4.0/">CC-BY 4.0</a>.
+      <a href="https://www.vbb.de/vbb-services/api-open-data/">VBB open data</a>.
+    </p>
+    <p>
+      <a href="https://github.com/medhinioak/berlin-transit-pulse">Source code on GitHub</a>
+    </p>
+  </footer>
+</body>
+</html>
