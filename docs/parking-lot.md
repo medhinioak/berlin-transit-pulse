@@ -13,3 +13,4 @@ AI review bot (each PR already gets a `/code-review`; revisit at the M2 gate). P
 | Brandenburg lines | 2026-11-18 | Non-goal for v1; the feed already contains them |
 | Public push notifications for degraded lines | 2026-11-18 | Non-goal for v1; needs accounts or a channel and a privacy policy |
 | An AI review bot on pull requests | 2026-11-18 | Set up once CI exists |
+| A custom domain, with a matching reverse DNS (PTR) name for the Elastic IP | 2026-11-21 | Route 53 zone $0.50/month plus about €10–15/year; the server keeps AWS's default PTR until then ([ADR-0020](adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md)) |
