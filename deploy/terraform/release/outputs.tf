@@ -1,5 +1,5 @@
 output "instance_id" {
-  description = "ID of the release instance (target of aws ssm start-session)."
+  description = "ID of the release instance (aws ssm start-session; GitHub secret RELEASE_INSTANCE_ID)."
   value       = aws_instance.server.id
 }
 
@@ -29,7 +29,7 @@ output "data_bucket_name" {
 }
 
 output "web_bucket_name" {
-  description = "Name of the web bucket holding the static site."
+  description = "Name of the web bucket holding the static site (GitHub secret WEB_BUCKET)."
   value       = aws_s3_bucket.web.bucket
 }
 
@@ -44,16 +44,21 @@ output "web_bucket_regional_domain_name" {
 }
 
 output "cloudfront_domain_name" {
-  description = "The site's public domain (https://<this>/)."
+  description = "The site's public domain, https://<this>/ (GitHub secret CLOUDFRONT_DOMAIN)."
   value       = aws_cloudfront_distribution.main.domain_name
 }
 
 output "cloudfront_distribution_id" {
-  description = "ID of the CloudFront distribution (target of cache invalidations in #18)."
+  description = "ID of the CloudFront distribution (GitHub secret CLOUDFRONT_DISTRIBUTION_ID)."
   value       = aws_cloudfront_distribution.main.id
 }
 
 output "cloudfront_distribution_arn" {
-  description = "ARN of the CloudFront distribution (for the CD role's invalidation permission in #18)."
+  description = "ARN of the CloudFront distribution (the deploy role may invalidate it)."
   value       = aws_cloudfront_distribution.main.arn
+}
+
+output "deploy_role_arn" {
+  description = "ARN of the role the release workflow assumes through OIDC (GitHub secret AWS_DEPLOY_ROLE_ARN)."
+  value       = aws_iam_role.deploy.arn
 }

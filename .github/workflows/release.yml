@@ -1,0 +1,294 @@
+# Continuous delivery of the release (#18): after CI passes on main, build arm64 images on a
+# native arm runner and push them to GHCR, deploy them to the release instance through SSM Run
+# Command, upload the page to S3, invalidate CloudFront and smoke-test the public URL.
+# AWS access is GitHub OIDC into btp-release-deploy (deploy/terraform/release/github_oidc.tf);
+# no keys, no SSH. Redeploy or roll back: run this workflow by hand with a SHA (docs/runbook.md).
+# Decision: docs/adr/0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit on main to deploy (full 40-character SHA); empty for main's tip"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# One release at a time, never cancelled halfway: a half-finished deploy is worse than a late one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+
+jobs:
+  # Which commit to release, and whether to release at all.
+  meta:
+    # workflow_run: only a successful CI run for a push to main in this repository (a fork's
+    # pull request from a branch called main also reports branch main). workflow_dispatch: only
+    # from main; the role's OIDC trust refuses any other ref anyway.
+    if: >-
+      (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_repository.full_name == github.repository)
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      deploy: ${{ steps.sha.outputs.deploy }}
+      move_main_tag: ${{ steps.sha.outputs.move_main_tag }}
+    steps:
+      - id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_SHA: ${{ inputs.sha }}
+        run: |
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" -q .sha)
+          if [ "$EVENT" = workflow_run ]; then
+            sha=$RUN_SHA
+            # CI runs for two quick pushes can finish out of order; the newer run deploys.
+            if [ "$sha" != "$tip" ]; then
+              echo "::notice::$sha is no longer main's tip ($tip); its CI run deploys instead"
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            move_main_tag=true
+          else
+            sha=${INPUT_SHA:-$tip}
+            if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::sha must be a full 40-character lowercase SHA, got '$sha'"
+              exit 1
+            fi
+            # Only commits that are on main: a pushed branch commit was never reviewed.
+            status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...main" -q .status)
+            if [ "$status" != ahead ] && [ "$status" != identical ]; then
+              echo "::error::$sha is not on main (compare status: $status)"
+              exit 1
+            fi
+            move_main_tag=false
+          fi
+          echo "Releasing $sha"
+          {
+            echo "sha=$sha"
+            echo "deploy=true"
+            echo "move_main_tag=$move_main_tag"
+          } >> "$GITHUB_OUTPUT"
+
+  # Every service with a Dockerfile at that commit, like CI's discover job.
+  discover:
+    needs: meta
+    if: ${{ needs.meta.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      services: ${{ steps.list.outputs.services }}
+    steps:
+      # In a workflow_run, github.sha is main's tip, not the commit CI tested: always pass ref.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      - id: list
+        run: |
+          services=$(printf "%s\n" services/*/Dockerfile | cut -d/ -f2 | jq -Rnc '[inputs]')
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          echo "Services with a Dockerfile: $services"
+
+  # arm64 images for the t4g.small, built natively (no QEMU). Images that already exist for
+  # the SHA are reused, so a rollback or a redeploy builds nothing.
+  images:
+    needs: [meta, discover]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        service: ${{ fromJSON(needs.discover.outputs.services) }}
+    env:
+      IMAGE: ghcr.io/medhinioak/btp-${{ matrix.service }}
+      SHA: ${{ needs.meta.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ github.token }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - id: existing
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$SHA" >/dev/null 2>&1; then
+            echo "$IMAGE:$SHA exists; not rebuilding"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build, check and push
+        if: ${{ steps.existing.outputs.found == 'false' }}
+        run: |
+          docker build -f "services/${{ matrix.service }}/Dockerfile" \
+            --platform linux/arm64 \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$SHA" \
+            -t "$IMAGE:$SHA" .
+          # The default command only imports the service, as in CI.
+          docker run --rm "$IMAGE:$SHA"
+          docker push "$IMAGE:$SHA"
+      - name: Move the main tag
+        if: ${{ needs.meta.outputs.move_main_tag == 'true' }}
+        run: docker buildx imagetools create --tag "$IMAGE:main" "$IMAGE:$SHA"
+
+  # Pull and restart on the instance through SSM. Brief downtime while containers restart.
+  deploy:
+    needs: [meta, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SHA: ${{ needs.meta.outputs.sha }}
+      INSTANCE_ID: ${{ secrets.RELEASE_INSTANCE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: btp-release-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      # The script that runs on the server must be the one from $SHA, so the checkout happens
+      # here, before deploy.sh. SHA was checked to be 40 hex characters in meta.
+      - name: Deploy through SSM
+        run: |
+          cat > "$RUNNER_TEMP/deploy-commands.sh" <<EOF
+          set -euo pipefail
+          test -d /opt/btp/repo/.git || git clone --depth 1 https://github.com/$GITHUB_REPOSITORY /opt/btp/repo
+          git -C /opt/btp/repo fetch --depth 1 origin $SHA
+          git -C /opt/btp/repo -c advice.detachedHead=false checkout --force --detach $SHA
+          /opt/btp/repo/deploy/release/deploy.sh $SHA
+          EOF
+          # The first live schedule import downloads and loads VBB's whole static GTFS.
+          deploy/release/ssm-run.sh "$INSTANCE_ID" 1800 "$RUNNER_TEMP/deploy-commands.sh"
+
+  # The page from S3 through CloudFront. Uploaded after the deploy, so a new page never calls
+  # an API that isn't there yet. Same Cache-Control as nginx (deploy/compose/web/nginx.conf).
+  web:
+    needs: [meta, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WEB_BUCKET: ${{ secrets.WEB_BUCKET }}
+      DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: btp-web-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Upload the page
+        run: |
+          # Assets first, index.html last, so the new page never refers to a missing file.
+          # Excluded paths are neither uploaded nor deleted.
+          aws s3 sync web/ "s3://$WEB_BUCKET/" --delete --no-progress \
+            --exclude '*.md' --exclude index.html --cache-control 'public, max-age=300'
+          aws s3 cp web/index.html "s3://$WEB_BUCKET/index.html" --no-progress \
+            --cache-control no-cache
+      - name: Invalidate CloudFront
+        # File names aren't versioned; while the site is tiny, invalidate everything (one path
+        # of the 1,000 free each month).
+        run: |
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" \
+            --paths '/*' --query Invalidation.Id --output text
+
+  # The public URL end to end: the page with its attribution, a healthy API with a fresh feed,
+  # and live data for at least one mode.
+  smoke:
+    needs: [meta, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DOMAIN: ${{ secrets.CLOUDFRONT_DOMAIN }}
+    steps:
+      - name: Check https://<domain>/
+        run: |
+          base="https://$DOMAIN"
+          # The first live poll waits one interval, and the processor needs about a minute.
+          deadline=$((SECONDS + 300))
+          wait_for() {
+            local what=$1
+            shift
+            until "$@"; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::$what after 5 minutes"
+                return 1
+              fi
+              sleep 10
+            done
+            echo "ok: $what"
+          }
+          page_has_attribution() {
+            local page
+            page=$(curl -fsS "$base/") && grep -q "VBB" <<<"$page" && grep -q "CC-BY 4.0" <<<"$page"
+          }
+          health_ok() {
+            curl -fsS -o /dev/null "$base/api/health"
+          }
+          has_running_mode() {
+            local n
+            n=$(curl -fsS "$base/api/v1/now/by-mode" | jq '[.modes[] | select(.running_trips > 0)] | length') &&
+              [ "$n" -ge 1 ]
+          }
+          wait_for "page with VBB attribution" page_has_attribution
+          wait_for "/api/health returns 200" health_ok
+          wait_for "/api/v1/now/by-mode has a mode with running trips" has_running_mode
+          curl -fsS "$base/api/v1/now/by-mode" | jq .
+      - uses: actions/checkout@v7
+        if: ${{ failure() }}
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: ${{ failure() }}
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: btp-smoke-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Server state after a failure
+        if: ${{ failure() }}
+        env:
+          INSTANCE_ID: ${{ secrets.RELEASE_INSTANCE_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/logs-commands.sh" <<'EOF'
+          cd /opt/btp/repo/deploy/compose
+          export BTP_IMAGE_TAG=$(cat /opt/btp/deployed_sha)
+          compose="docker compose -p btp-live --env-file /opt/btp/.env -f compose.yaml -f compose.release.yaml"
+          echo "deployed: $BTP_IMAGE_TAG"
+          $compose ps -a
+          $compose logs --no-color --tail=40
+          free -m
+          EOF
+          deploy/release/ssm-run.sh "$INSTANCE_ID" 120 "$RUNNER_TEMP/logs-commands.sh"

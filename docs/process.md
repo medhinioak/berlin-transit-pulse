@@ -29,7 +29,7 @@ lives in the repository: issues, ADRs, these docs and the troubleshooting log.
 | Tasks | GitHub Issues, one milestone per release; the Projects board shows status |
 | Ideas not in the plan | [`parking-lot.md`](parking-lot.md) |
 | Problems hit, their causes and fixes (feed, infra, tooling) | [`troubleshooting.md`](troubleshooting.md) |
-| How to deploy, roll back, restore and shut down | `runbook.md`, created with the M2 release stack |
+| How to deploy, roll back, restore and shut down | [`runbook.md`](runbook.md) |
 | AWS account setup, region and sign-in | [`aws-account.md`](aws-account.md) |
 | Terms | [`glossary.md`](glossary.md) |
 | Working rules and gotchas, written for AI coding assistants and binding on everyone | [`../CLAUDE.md`](../CLAUDE.md) |

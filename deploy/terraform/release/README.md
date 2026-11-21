@@ -2,14 +2,16 @@
 
 The server the whole release runs on: one EC2 t4g.small in `eu-north-1` running every
 service with docker compose, plus the S3 buckets for data and the static site (#16) and the
-CloudFront distribution that serves the site (#17). The deploy pipeline (#18) comes next.
-Decisions: [ADR-0020](../../../docs/adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md) (server),
-[ADR-0021](../../../docs/adr/0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md) (CloudFront).
+CloudFront distribution that serves the site (#17), and the OIDC role GitHub Actions deploys
+with (#18). Decisions: [ADR-0020](../../../docs/adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md) (server),
+[ADR-0021](../../../docs/adr/0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md) (CloudFront),
+[ADR-0012](../../../docs/adr/0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md) (deploys).
+Operating the server: [`docs/runbook.md`](../../../docs/runbook.md).
 Conventions for all stacks: [`../README.md`](../README.md).
 
 ## What it creates
 
-42 resources:
+45 resources:
 
 | File | Resources |
 | --- | --- |
@@ -18,6 +20,7 @@ Conventions for all stacks: [`../README.md`](../README.md).
 | `ec2.tf` | t4g.small (Amazon Linux 2023, arm64), standard CPU credits, IMDSv2 with hop limit 2, 30 GB encrypted gp3 root volume, no key pair; an Elastic IP |
 | `s3.tf` | Data bucket `btp-data-<account-id>-eu-north-1` with lifecycle rules, web bucket `btp-web-<account-id>-eu-north-1` with a rule aborting incomplete uploads; each with public access block, `BucketOwnerEnforced`, SSE-S3 and a TLS-only bucket policy; the web bucket's policy also lets the distribution read objects |
 | `cloudfront.tf` | Distribution with an S3 origin (Origin Access Control) and the instance as `/api/*` origin, a response headers policy for the page, and the security group rule for port 80 from CloudFront's origin-facing prefix list |
+| `github_oidc.tf` | GitHub Actions OIDC provider; role `btp-release-deploy`, trusted only for workflow runs on `main`, that can send `AWS-RunShellScript` commands to the release instance, read their results, write the web bucket and invalidate the distribution |
 | `secrets.tf` | Five generated Postgres passwords as SecureString parameters `/btp/release/pg/{superuser,processor,schedule,metrics_jobs,api}`; the feed contact as `/btp/release/feed_contact` |
 
 No NAT gateway, no load balancer, no VPC endpoints. Cost: about $18.72 (€17.00) a month for
@@ -98,12 +101,12 @@ domain and certificate, `PriceClass_100`, HTTP/2 and HTTP/3). HTTP redirects to 
   `btp-release-web` policy in `cloudfront.tf` here. Change them together.
 - **TLS.** With the default certificate CloudFront allows TLS 1.0 and up (`TLSv1` policy).
   Requiring TLS 1.2 needs a custom domain with its own certificate.
-- **Caching after a deploy.** The deploy (#18) sets `Cache-Control` on upload or invalidates
-  (`cloudfront_distribution_id` output); otherwise edges serve the old page for up to a day.
+- **Caching after a deploy.** The deploy uploads `index.html` with `Cache-Control: no-cache` and
+  the assets with `max-age=300`, as nginx does locally, and invalidates `/*`.
 - No access logs (cost).
 
 A new distribution takes about 5–15 minutes to deploy; `terraform apply` waits for it. Until
-the deploy (#18) uploads the page and starts nginx on port 80, check only:
+the first deploy uploads the page and starts nginx on port 80, check only:
 
 ```bash
 DOMAIN=$(terraform -chdir=deploy/terraform/release output -raw cloudfront_domain_name)
@@ -115,7 +118,8 @@ curl -sI "https://$DOMAIN/"                       # 403 from S3 (empty bucket), 
 curl -sI "http://$DOMAIN/"                        # 301 to https://
 ```
 
-`/api/*` answers 502 or 504 until nginx listens on port 80. The full end-to-end check is in #18.
+`/api/*` answers 502 or 504 until nginx listens on port 80. After that, the release workflow's
+`smoke` job checks the whole path on every deploy.
 
 ## Plan and apply (maintainer)
 
@@ -129,6 +133,30 @@ terraform -chdir=deploy/terraform/release apply plan.tfplan
 `TF_STATE_BUCKET` is needed on a machine's first init only. Read the plan before applying, and
 paste it into the pull request with the account ID redacted. The Terraform state contains the
 Postgres passwords; it lives in the private, encrypted state bucket (#13).
+
+## Deploy setup (maintainer, once)
+
+GitHub Actions deploys through the role in `github_oidc.tf` ([runbook](../../../docs/runbook.md)).
+After the apply, add these repository secrets (Settings → Secrets and variables → Actions).
+They are secrets rather than variables, so the values are masked in the public logs:
+
+| Secret | Output |
+| --- | --- |
+| `AWS_DEPLOY_ROLE_ARN` | `deploy_role_arn` |
+| `RELEASE_INSTANCE_ID` | `instance_id` |
+| `WEB_BUCKET` | `web_bucket_name` |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `cloudfront_distribution_id` |
+| `CLOUDFRONT_DOMAIN` | `cloudfront_domain_name` |
+
+```bash
+for o in deploy_role_arn instance_id web_bucket_name cloudfront_distribution_id cloudfront_domain_name; do
+  echo "$o=$(terraform -chdir=deploy/terraform/release output -raw "$o")"
+done
+```
+
+The first workflow run creates the `btp-*` packages in GHCR as private, so the server can't
+pull them and that deploy fails. Make each package public (the package's Package settings →
+Change visibility), then re-run the workflow.
 
 ## Open a shell
 

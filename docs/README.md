@@ -20,7 +20,7 @@ need is missing, that is a bug: open an issue.
 | **A developer joining the project** | [process](process.md) (onboarding), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CLAUDE.md`](../CLAUDE.md) for the working rules, [glossary](glossary.md), [troubleshooting](troubleshooting.md), [compose stack](../deploy/compose/README.md), [fixtures](../fixtures/README.md) |
 | **A reviewer or auditor** | [spec](spec.md), [architecture](architecture.md) (design rules, security and access, known limitations), [ADRs](adr/README.md), [risks](risks.md), [cost](cost.md), [AWS account](aws-account.md), [Terraform stacks](../deploy/terraform/README.md), [data sources and licensing](data-sources.md) |
 | **Planning or managing delivery** | [plan](plan.md), [risks](risks.md), [cost](cost.md), [parking lot](parking-lot.md), [alternatives track](alternatives.md) |
-| **Operating the system** | [architecture](architecture.md#observability-and-alerting), [AWS account](aws-account.md), [troubleshooting](troubleshooting.md); a runbook arrives with M2 |
+| **Operating the system** | [architecture](architecture.md#observability-and-alerting), [AWS account](aws-account.md), [troubleshooting](troubleshooting.md), [runbook](runbook.md) |
 
 ## All documents
 
@@ -36,6 +36,7 @@ need is missing, that is a bug: open an issue.
 | [`adr/`](adr/README.md) | Architecture decision records |
 | [`process.md`](process.md) | How work is done: roles, onboarding, change flow, review |
 | [`aws-account.md`](aws-account.md) | AWS account baseline and conventions |
+| [`runbook.md`](runbook.md) | Operating the release: deploy, roll back, logs, timetable change, shut down |
 | [`troubleshooting.md`](troubleshooting.md) | Problems hit, causes and fixes |
 | [`parking-lot.md`](parking-lot.md) | Ideas that are not in the plan |
 | [`glossary.md`](glossary.md) | Terms |

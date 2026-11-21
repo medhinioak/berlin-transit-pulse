@@ -1,0 +1,65 @@
+# Release override for the server (#18), used only by deploy/release/deploy.sh:
+#   docker compose -p btp-live --env-file /opt/btp/.env \
+#     -f compose.yaml -f compose.release.yaml …
+# Pulls the arm64 images built by .github/workflows/release.yml instead of building, runs the
+# live feed, and publishes nginx on port 80 for CloudFront (the security group admits only
+# CloudFront's origin-facing ranges, #17). Passwords and the feed contact come from the env
+# file, rendered from SSM Parameter Store; compose.yaml's ${…} defaults are never used here.
+# The fixtures mounts in compose.yaml stay; live mode doesn't read them.
+
+# Every built service: pull the image for BTP_IMAGE_TAG on each deploy and drop compose.yaml's
+# `build`, so the 2 GB server never builds an image (CLAUDE.md, Gotchas). `!reset` has to sit
+# on each service; through a YAML merge key (<<) it has no effect.
+
+services:
+  schedule-import:
+    pull_policy: always
+    build: !reset null
+    image: ghcr.io/medhinioak/btp-schedule:${BTP_IMAGE_TAG:?set BTP_IMAGE_TAG to the git SHA to deploy}
+    environment:
+      BTP_FEED_MODE: live
+    # A failed import (a new timetable published before its start date, a failed download)
+    # must not stop a deploy while an active version keeps serving: exit 0 then, and print
+    # the marker deploy.sh turns into a workflow warning. With no active version at all (a new
+    # server), exit 1 and fail the deploy, because nothing downstream could work.
+    command:
+      - sh
+      - -c
+      - |
+        btp-schedule import --activate && exit 0
+        if btp-schedule status | grep -q ' active '; then
+          echo "BTP_SCHEDULE_IMPORT_FAILED: import failed, keeping the active version"
+          btp-schedule status
+          exit 0
+        fi
+        echo "schedule-import: import failed and no version is active" >&2
+        exit 1
+
+  ingest:
+    pull_policy: always
+    build: !reset null
+    image: ghcr.io/medhinioak/btp-ingest:${BTP_IMAGE_TAG:?set BTP_IMAGE_TAG to the git SHA to deploy}
+    environment:
+      BTP_FEED_MODE: live
+
+  stop-event-processor:
+    pull_policy: always
+    build: !reset null
+    image: ghcr.io/medhinioak/btp-stop-event-processor:${BTP_IMAGE_TAG:?set BTP_IMAGE_TAG to the git SHA to deploy}
+
+  metrics-jobs-apply:
+    pull_policy: always
+    build: !reset null
+    image: ghcr.io/medhinioak/btp-metrics-jobs:${BTP_IMAGE_TAG:?set BTP_IMAGE_TAG to the git SHA to deploy}
+
+  metrics-api:
+    pull_policy: always
+    build: !reset null
+    image: ghcr.io/medhinioak/btp-metrics-api:${BTP_IMAGE_TAG:?set BTP_IMAGE_TAG to the git SHA to deploy}
+    environment:
+      BTP_FEED_MODE: live
+
+  # Port lists merge: 127.0.0.1:8080 from compose.yaml stays for checks on the host.
+  web:
+    ports:
+      - "80:8080"
