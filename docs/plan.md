@@ -20,8 +20,8 @@ pull request.
 
 | Milestone | Release | Target | Issues closed / open | State |
 | --- | --- | --- | --- | --- |
-| M1 Walking skeleton | v0.1 | 2026-11-30 | 17 / 1 | Exit criteria met (milestone gate 2026-11-21); open: #14 tag v0.1 |
-| M2 Collecting 24/7 in AWS | v0.2 | 2026-12-07 | 0 / 9 | Not started |
+| M1 Walking skeleton | v0.1 | 2026-11-30 | 19 / 0 | Done: v0.1 released 2026-11-21 |
+| M2 Collecting 24/7 in AWS | v0.2 | 2026-12-07 | 0 / 10 | Not started |
 | M3 Trustworthy metrics | v0.3 | 2026-12-21 | 0 / 10 | Not started |
 | M4 Public beta | v0.9 | 2027-01-10 | 0 / 8 | Not started |
 | M5 v1.0 launch | v1.0 | 2027-01-17 | 0 / 6 | Not started |
@@ -63,7 +63,8 @@ Exit criteria, checked at the milestone gate on 2026-11-21 (#14):
   the plan: an IAM admin user with MFA instead of IAM Identity Center, which needs AWS
   Organizations ([`aws-account.md`](aws-account.md#why-an-iam-user-not-iam-identity-center)).
   AWS bill at the gate: about €0.
-- [ ] Tag v0.1 and GitHub Release published (after #14 is merged).
+- [x] Tag v0.1 and GitHub Release published on 2026-11-21
+  ([release](https://github.com/medhinioak/berlin-transit-pulse/releases/tag/v0.1)).
 
 ### M2 Collecting 24/7 in AWS: v0.2, target 2026-12-07
 
