@@ -74,7 +74,7 @@ real VBB feed, needs `BTP_FEED_CONTACT` and must follow the
 ```sh
 make test                # unit tests with coverage
 make test-integration    # needs `make up`
-scripts/smoke.sh         # end to end in its own compose project (stop `make up` first; CI runs this)
+scripts/smoke.sh         # end to end in its own compose project; needs curl and jq (stop `make up` first)
 make lint                # ruff
 make typecheck           # mypy, strict, per package
 make help                # every target

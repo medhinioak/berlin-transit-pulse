@@ -123,3 +123,10 @@ jobs:
           enable-cache: true
       - run: uv sync --all-packages --frozen
       - run: scripts/smoke.sh make test-integration
+        # Below the job timeout, so the log step still runs if `make up` hangs.
+        timeout-minutes: 12
+      - name: Logs and cleanup after a timeout
+        if: ${{ failure() || cancelled() }}
+        run: |
+          docker compose -p btp-smoke -f deploy/compose/compose.yaml logs --tail=200
+          docker compose -p btp-smoke -f deploy/compose/compose.yaml down -v

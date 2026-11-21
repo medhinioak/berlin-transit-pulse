@@ -3,11 +3,17 @@
 # extra command while the stack is up (CI: `scripts/smoke.sh make test-integration`), then
 # stop the stack and remove its volumes.
 #
+# The 180 s limit starts after `make up` returns; CI bounds `make up` with the step timeout.
+#
 # Runs as its own compose project (default btp-smoke), so `down -v` never touches the volumes
 # of a local `make up` stack. Stop that stack first (`make down`): both use the same ports.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+for tool in docker make curl jq; do
+  command -v "$tool" >/dev/null || { echo "smoke: needs $tool on PATH" >&2; exit 1; }
+done
 
 export BTP_FEED_MODE=fixtures
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-btp-smoke}"
