@@ -53,7 +53,10 @@ guard; a reused key there is overwritten and expires anyway. The data bucket has
 reviewed change first.
 
 After the first apply, check the permissions from an SSM session on the instance (see
-[Open a shell](#open-a-shell)):
+[Open a shell](#open-a-shell)). `aws ssm start-session` needs the
+[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
+installed on your machine, next to the AWS CLI; without it the session doesn't open
+(`SessionManagerPlugin is not found`).
 
 ```bash
 BUCKET=btp-data-<account-id>-eu-north-1
