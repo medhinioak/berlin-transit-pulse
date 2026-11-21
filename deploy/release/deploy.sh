@@ -86,6 +86,10 @@ log "pulling images for $sha"
 # exit codes, and `up --wait` waits for the long-running services to be healthy.
 log "starting the stack"
 "${COMPOSE[@]}" up -d --no-build --remove-orphans
+# web bind-mounts the single file nginx.conf. The checkout replaces that file with a new inode,
+# while a running container keeps the old one. web's compose config doesn't change, so `up`
+# wouldn't recreate it: recreate it on every deploy so a changed nginx.conf takes effect.
+"${COMPOSE[@]}" up -d --no-build --no-deps --force-recreate web
 
 for s in "${ONESHOTS[@]}"; do
   code=$(docker wait "$("${COMPOSE[@]}" ps -aq "$s")")
@@ -96,7 +100,9 @@ done
 # schedule-import exits 0 after a failed import if an active version exists
 # (compose.release.yaml). Say so loudly: ssm-run.sh echoes this on the runner, where
 # ::warning:: becomes an annotation on the workflow run.
-if "${COMPOSE[@]}" logs --no-log-prefix schedule-import | grep -q BTP_SCHEDULE_IMPORT_FAILED; then
+# Captured first: under pipefail, `logs | grep -q` can fail when grep exits early (SIGPIPE).
+import_logs=$("${COMPOSE[@]}" logs --no-log-prefix schedule-import)
+if grep -q BTP_SCHEDULE_IMPORT_FAILED <<<"$import_logs"; then
   echo "::warning::schedule-import failed; the previously active schedule version stays in use. See: docker compose -p btp-live logs schedule-import"
 fi
 

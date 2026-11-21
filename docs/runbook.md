@@ -56,10 +56,15 @@ gh workflow run release.yml                             # redeploy main's tip
 gh run watch                                            # follow it
 ```
 
-The SHA must be on `main`; anything else is refused. A rollback runs the old commit's
+The SHA must be on `main`, have passed CI, and come from #18 onwards (older commits have no
+`deploy/release/deploy.sh`); anything else is refused. A rollback runs the old commit's
 `deploy.sh` and compose files too, so it really is the old release, Postgres data excepted:
 schema changes made by a newer release are not undone. The next push to `main` deploys `main`
 again. To stay on the old version, revert on `main` instead.
+
+Runs queue one at a time and are never cancelled midway. GitHub keeps only one *waiting* run,
+though: if a rollback is waiting and a push to `main` queues a deploy, the newer one replaces it.
+Check `gh run list -w release.yml` after starting a rollback while another run is in progress.
 
 ## Open a shell on the server
 
