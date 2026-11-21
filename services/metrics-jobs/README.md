@@ -101,7 +101,8 @@ a Postgres restart pays for an empty cache; the 500 ms target (#9) holds once wa
   matches the fixture trips. Importing the live static GTFS while replaying fixtures works only
   while the live GTFS still contains the 2026-11-18 trip_ids; after the timetable change on
   2026-12-13 the fixtures-mode endpoint comes back empty. Set `BTP_FEED_MODE` for the whole
-  stack, not per service.
+  stack, not per service. Switching modes on an existing volume can leave the wrong schedule
+  version active (#75).
 - **No retention yet** (M3): `max(feed_ts)` in `v_feed_status` and the `service_date` filter
   on `trip_state` are sequential scans. They take ~20 ms at ~80k rows (one day) and grow with
   every day kept. Retention or an index on `trip_state` (processor schema) comes before it
