@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install test test-integration lint fmt typecheck up down logs ps kafka-topics psql \
-	fixtures tf-plan
+	fixtures tf-check-stack tf-validate tf-plan
 
 COMPOSE := docker compose -f deploy/compose/compose.yaml
 # Containers that run once and exit 0 (make up checks their exit codes).
@@ -67,5 +67,22 @@ fixtures: ## Record a fixture set (LABEL=rush-hour|evening, COUNT=4), trim it, r
 	uv run python scripts/trim_fixtures.py fixtures/local/vbb-rt/$(LABEL) --out fixtures/vbb-rt/$(LABEL)
 	uv run python scripts/build_static_fixture.py
 
-tf-plan: ## Terraform fmt, validate, plan (not yet: see #13)
-	@echo "make $@: not implemented yet, see #13"; exit 1
+# Terraform. Claude Code runs tf-validate only; a maintainer runs tf-plan and apply
+# (deploy/terraform/README.md). TF_STATE_BUCKET is needed on a stack's first init.
+# AWS_PROFILE defaults to btp locally; CI's OIDC env credentials take precedence over it.
+TF = AWS_PROFILE=$(or $(AWS_PROFILE),btp) terraform -chdir=deploy/terraform/$(STACK)
+
+tf-check-stack:
+	@test -n "$(STACK)" -a -d "deploy/terraform/$(STACK)" || \
+		{ echo "usage: make $(MAKECMDGOALS) STACK=<folder in deploy/terraform/>"; exit 1; }
+
+tf-validate: tf-check-stack ## Terraform fmt check, init without backend, validate; no credentials (STACK=name)
+	$(TF) fmt -check -recursive
+	$(TF) init -backend=false -input=false
+	$(TF) validate
+
+tf-plan: tf-check-stack ## Terraform fmt check, init, validate, plan to plan.tfplan (STACK=name)
+	$(TF) fmt -check -recursive
+	$(TF) init -input=false $(if $(TF_STATE_BUCKET),-backend-config="bucket=$(TF_STATE_BUCKET)")
+	$(TF) validate
+	$(TF) plan -input=false -out=plan.tfplan

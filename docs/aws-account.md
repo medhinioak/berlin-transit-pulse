@@ -12,7 +12,7 @@ No account IDs, sign-in URLs, email addresses or credentials belong in this repo
 | --- | --- |
 | Region | `eu-north-1` (Europe, Stockholm) for every regional resource |
 | CLI profile | `btp` |
-| Tags on every resource | `Project=berlin-transit-pulse`, `Stack=release` or `Stack=poc` (plus `ManagedBy=terraform`) |
+| Tags on every resource | `Project=berlin-transit-pulse`, `Stack=release`, `Stack=poc` or `Stack=bootstrap` (state bucket), plus `ManagedBy=terraform` |
 | Budget | Release stack under €20/month; alerts at $5, $15 and $20 |
 | Plan | AWS Free plan with $100 in credits, from 2026-11-18 |
 

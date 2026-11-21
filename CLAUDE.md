@@ -32,7 +32,8 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Pre-commit hooks: uv run pre-commit run --all-files
 - Record new feed fixtures: make fixtures LABEL=rush-hour|evening (calls the live feed, needs
   BTP_FEED_CONTACT; see fixtures/README.md and Rules)
-- Terraform: make tf-plan STACK=release (fmt, validate, plan). Never apply from here. (stub, #13)
+- Terraform: make tf-validate STACK=bootstrap (no credentials; init -backend=false, fmt, validate).
+  make tf-plan STACK=… is for the maintainer. Never apply from here (deploy/terraform/README.md)
 - GitHub: use the gh CLI for issues, PRs and CI
   (gh issue view N, gh pr checks, gh run view --log-failed)
 
@@ -93,7 +94,7 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
   the account baseline (MFA, admin IAM user, budgets; docs/aws-account.md).
 - Claude Code never runs terraform apply or terraform destroy. A maintainer applies after
   reading the plan; the plan output goes in the PR.
-- Tag every resource Project=berlin-transit-pulse and Stack=release|poc.
+- Tag every resource Project=berlin-transit-pulse and Stack=release|poc (bootstrap for the state bucket).
 - Budget: release under €20/month. A change that adds monthly cost states the estimated
   € delta in the PR. Release stack: no NAT gateway, no load balancer, no managed Kafka.
 - No secrets in the repo. AWS access is `aws login` short-term credentials locally (IAM user,
