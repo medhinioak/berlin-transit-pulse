@@ -15,7 +15,14 @@ make up                                          # compose: http://localhost:800
 BTP_FEED_MODE=fixtures uv run btp-metrics-api    # on the host (127.0.0.1:8000)
 ```
 
-OpenAPI docs: <http://localhost:8000/docs>. Logs are JSON lines via `btp_common`, uvicorn's
+OpenAPI docs: <http://localhost:8000/docs>, and through nginx at <http://localhost:8080/api/docs>
+(the same path behind CloudFront). The page is self-hosted Swagger UI (`docs.py`, `docs_assets/`):
+FastAPI's default page loads from a CDN, which the site's CSP blocks. The image build downloads
+the Swagger UI files (pinned version and SHA-256 in the `Dockerfile`), so on the host without the
+image `/docs` stays blank; use `make up`. There is no ReDoc. Trailing slashes aren't redirected
+(`/v1/now/by-mode/` is a 404): behind the proxy the app can't build a correct absolute URL.
+
+Logs are JSON lines via `btp_common`, uvicorn's
 access log included. The connection pool opens without waiting, so the API starts while the
 database is down; `/health` then answers 503 and the data endpoint 503.
 

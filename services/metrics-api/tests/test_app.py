@@ -97,3 +97,23 @@ def test_health_database_down(monkeypatch: pytest.MonkeyPatch) -> None:
     response = c.get("/health")
     assert response.status_code == 503
     assert response.json()["reason"] == "database unavailable: OperationalError"
+
+
+def test_trailing_slash_is_not_redirected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A trailing slash is a 404, not a redirect to an absolute URL the viewer can't reach."""
+    c = client(FakePool(), monkeypatch, now_by_mode=lambda conn: [])
+    response = c.get("/v1/now/by-mode/", follow_redirects=False)
+    assert response.status_code == 404
+    assert "location" not in response.headers
+
+
+def test_docs_page_is_self_hosted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """/docs links only relative, same-origin assets and has no inline script (site CSP)."""
+    c = client(FakePool(), monkeypatch)
+    html = c.get("/docs").text
+    assert 'src="docs-assets/init.js"' in html
+    assert "<script>" not in html
+    assert "http" not in html
+    assert c.get("/docs-assets/init.js").status_code == 200
+    assert c.get("/redoc").status_code == 404
+    assert c.get("/openapi.json").status_code == 200

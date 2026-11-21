@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from psycopg_pool import ConnectionPool
 
-from btp_metrics_api import queries
+from btp_metrics_api import docs, queries
 from btp_metrics_api.models import (
     Health,
     NowByModeResponse,
@@ -75,7 +75,17 @@ def create_app(settings: ApiSettings) -> FastAPI:
         description="Read-only. Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC-BY 4.0.",
         version="0.1.0",
         lifespan=lifespan,
+        # No trailing-slash redirects: behind nginx and CloudFront the app can't build a correct
+        # absolute URL (it sees the origin's host, plain HTTP and no /api prefix), so a
+        # redirect would send viewers to an unreachable address. /v1/now/by-mode/ is a 404.
+        redirect_slashes=False,
+        # FastAPI's own pages load from a CDN and run inline scripts, which the site's CSP
+        # blocks. /docs is self-hosted instead (docs.py); ReDoc is dropped.
+        docs_url=None,
+        redoc_url=None,
     )
+    app.include_router(docs.router)
+    app.mount("/docs-assets", docs.assets(), name="docs-assets")
     app.state.settings = settings
     app.state.as_of = as_of
 
