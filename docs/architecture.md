@@ -122,11 +122,16 @@ does not use Postgres. Details: [compose README](../deploy/compose/README.md#sch
 
 ### S3
 
-| Prefix | Content | Retention |
+Two private buckets in the release stack, **Built** (#16) and empty until the uploads below
+exist ([release README](../deploy/terraform/release/README.md#buckets)). `<account-id>` is
+the AWS account ID.
+
+| Bucket and prefix | Content | Retention |
 | --- | --- | --- |
-| Raw snapshots | One feed snapshot every 5 minutes (about 2.3 MB each) | 14 days, by lifecycle rule (about 9 GB stored) |
-| Parquet history | Finalised stop events, partitioned by date and mode | Kept; grows about 1–3 GB per month |
-| Backups | Nightly `pg_dump` (#28) | Not decided yet |
+| `btp-data-<account-id>-eu-north-1/raw/vbb-rt/` | One feed snapshot every 5 minutes (about 2.3 MB each); uploads planned (#19) | 14 days, by lifecycle rule (about 9 GB stored): **Built** (#16) |
+| `btp-data-<account-id>-eu-north-1/history/` | Finalised stop events as Parquet, partitioned by date and mode; planned M3/M4 | Kept; grows about 1–3 GB per month |
+| `btp-data-<account-id>-eu-north-1/backups/` | Nightly `pg_dump`; planned (#28) | Not decided yet (#28) |
+| `btp-web-<account-id>-eu-north-1` | Static site, served by CloudFront (#17), deployed by CD (#18) | Replaced on deploy |
 
 Terraform state lives in its own bucket (#13).
 

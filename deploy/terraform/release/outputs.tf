@@ -22,3 +22,23 @@ output "ssm_parameter_prefix" {
   description = "SSM Parameter Store path holding this stack's parameters."
   value       = local.ssm_prefix
 }
+
+output "data_bucket_name" {
+  description = "Name of the data bucket (raw/vbb-rt/, history/, backups/)."
+  value       = aws_s3_bucket.data.bucket
+}
+
+output "web_bucket_name" {
+  description = "Name of the web bucket holding the static site."
+  value       = aws_s3_bucket.web.bucket
+}
+
+output "web_bucket_arn" {
+  description = "ARN of the web bucket (for the CloudFront OAC bucket policy in #17)."
+  value       = aws_s3_bucket.web.arn
+}
+
+output "web_bucket_regional_domain_name" {
+  description = "Regional domain name of the web bucket (the CloudFront origin in #17)."
+  value       = aws_s3_bucket.web.bucket_regional_domain_name
+}

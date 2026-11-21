@@ -1,19 +1,20 @@
 # Release stack
 
 The server the whole release runs on: one EC2 t4g.small in `eu-north-1` running every
-service with docker compose. Later M2 issues add S3 (#16), CloudFront (#17) and the deploy
-pipeline (#18) to this stack. Decisions: [ADR-0020](../../../docs/adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md).
+service with docker compose, plus the S3 buckets for data and the static site (#16). Later M2
+issues add CloudFront (#17) and the deploy pipeline (#18) to this stack. Decisions: [ADR-0020](../../../docs/adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md).
 Conventions for all stacks: [`../README.md`](../README.md).
 
 ## What it creates
 
-25 resources:
+37 resources:
 
 | File | Resources |
 | --- | --- |
 | `network.tf` | VPC `10.20.0.0/16`, one public subnet `10.20.1.0/24` in `eu-north-1a`, internet gateway, route table, default route, association; a security group with **no inbound rules** and all outbound |
-| `iam.tf` | Instance role with `AmazonSSMManagedInstanceCore` and read access to the parameters under `/btp/release/`; instance profile |
+| `iam.tf` | Instance role with `AmazonSSMManagedInstanceCore`, read access to the parameters under `/btp/release/` and write-only access to the data bucket's `raw/` and `backups/`; instance profile |
 | `ec2.tf` | t4g.small (Amazon Linux 2023, arm64), standard CPU credits, IMDSv2 with hop limit 2, 30 GB encrypted gp3 root volume, no key pair; an Elastic IP |
+| `s3.tf` | Data bucket `btp-data-<account-id>-eu-north-1` with lifecycle rules, web bucket `btp-web-<account-id>-eu-north-1`; each with public access block, `BucketOwnerEnforced`, SSE-S3 and a TLS-only bucket policy |
 | `secrets.tf` | Five generated Postgres passwords as SecureString parameters `/btp/release/pg/{superuser,processor,schedule,metrics_jobs,api}`; the feed contact as `/btp/release/feed_contact` |
 
 No NAT gateway, no load balancer, no VPC endpoints. Cost: about $18.70 (€17) a month
@@ -22,6 +23,36 @@ No NAT gateway, no load balancer, no VPC endpoints. Cost: about $18.70 (€17) a
 On first boot, `templates/cloud-init.sh.tftpl` installs Docker and git, the Docker Compose
 plugin (pinned version, SHA-256 checked), Docker log rotation (10 MB × 3 files per container),
 a 1 GB swap file with `vm.swappiness=10`, and creates `/opt/btp/`.
+
+## Buckets
+
+Both buckets are private (all four public access blocks), encrypted with SSE-S3, accept only
+TLS requests and have object ownership enforced (no ACLs). Versioning is off: keys are unique
+and the instance cannot delete. The account ID in the names comes from the caller identity.
+
+| Bucket | Prefix | Content | Retention | Written by |
+| --- | --- | --- | --- | --- |
+| `btp-data-…` | `raw/vbb-rt/` | Raw feed snapshots, one every 5 minutes (#19) | 14 days (S3 runs expiry at midnight UTC, so 14–15 days) | Instance role |
+| `btp-data-…` | `history/` | Parquet stop events (M3/M4) | Kept | Not decided yet |
+| `btp-data-…` | `backups/` | Nightly `pg_dump` (#28) | Kept until #28 decides | Instance role |
+| `btp-web-…` | | Static site; CloudFront reads it through Origin Access Control (#17), not a website endpoint | Replaced on deploy | CD role (#18) |
+
+Incomplete multipart uploads in the data bucket are aborted after 1 day. The instance role
+has `s3:PutObject` on `raw/*` and `backups/*` and `s3:ListBucket` limited to those prefixes:
+no `DeleteObject`, nothing on `history/` or the web bucket. The data bucket has
+`prevent_destroy`, because it holds the data that outlives the server; removing it needs a
+reviewed change first.
+
+After the first apply, check the permissions from an SSM session on the instance (see
+[Open a shell](#open-a-shell)):
+
+```bash
+BUCKET=btp-data-<account-id>-eu-north-1
+echo test | aws s3 cp - "s3://$BUCKET/raw/vbb-rt/_check.txt"   # upload: works
+aws s3 rm "s3://$BUCKET/raw/vbb-rt/_check.txt"                  # AccessDenied (expected)
+```
+
+The test object then expires through the lifecycle rule.
 
 ## Plan and apply (maintainer)
 
