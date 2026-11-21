@@ -143,6 +143,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "web" {
 }
 
 # #17 adds the statement that lets CloudFront (OAC) read objects to this document.
+# CloudFront fetches from an S3 origin with the viewer's protocol, so the distribution must
+# use viewer_protocol_policy redirect-to-https or https-only: with allow-all, HTTP viewers
+# get 403 from the TLS-only statement below.
 data "aws_iam_policy_document" "web_bucket" {
   statement {
     sid     = "DenyInsecureTransport"

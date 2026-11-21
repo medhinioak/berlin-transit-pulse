@@ -55,12 +55,40 @@ resource "aws_iam_role_policy" "server_parameters" {
 # s3:PutObject also covers multipart uploads.
 data "aws_iam_policy_document" "server_s3" {
   statement {
-    sid     = "WriteRawAndBackups"
-    actions = ["s3:PutObject"]
-    resources = [
-      "${aws_s3_bucket.data.arn}/raw/*",
-      "${aws_s3_bucket.data.arn}/backups/*",
-    ]
+    sid       = "WriteRaw"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data.arn}/raw/*"]
+  }
+
+  # Versioning is off, so an overwrite would lose a backup for good. PutObject and
+  # CompleteMultipartUpload into backups/ must send If-None-Match: * (S3 then refuses an
+  # existing key with 412). Plain `aws s3 cp` doesn't send it; use
+  # `aws s3api put-object --if-none-match '*'`. The pattern follows the AWS guide
+  # "Enforce conditional writes on Amazon S3 buckets".
+  statement {
+    sid       = "CreateBackupsOnly"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data.arn}/backups/*"]
+
+    condition {
+      test     = "Null"
+      variable = "s3:if-none-match"
+      values   = ["false"]
+    }
+  }
+
+  # CreateMultipartUpload, UploadPart and UploadPartCopy can't carry the header; the
+  # upload still only lands through a CompleteMultipartUpload with If-None-Match.
+  statement {
+    sid       = "BackupMultipartParts"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data.arn}/backups/*"]
+
+    condition {
+      test     = "Bool"
+      variable = "s3:ObjectCreationOperation"
+      values   = ["false"]
+    }
   }
 
   statement {
