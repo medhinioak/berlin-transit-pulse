@@ -97,8 +97,8 @@ services:
     restart: unless-stopped
 
   # One-shot: imports the static GTFS as a new version and activates it, then exits 0.
-  # Re-running with an unchanged zip is a no-op. BTP_FEED_MODE=fixtures imports the mini GTFS
-  # from fixtures/ instead, with no network.
+  # Re-running with an unchanged zip is a no-op. Imports the mini GTFS from fixtures/ by default,
+  # with no network; BTP_FEED_MODE=live downloads the VBB static GTFS.
   schedule-import:
     build:
       context: ../..
@@ -106,7 +106,7 @@ services:
     command: ["btp-schedule", "import", "--activate"]
     environment:
       BTP_SERVICE_NAME: schedule
-      BTP_FEED_MODE: ${BTP_FEED_MODE:-live}
+      BTP_FEED_MODE: ${BTP_FEED_MODE:-fixtures}
       BTP_FEED_CONTACT: ${BTP_FEED_CONTACT:-https://github.com/medhinioak/berlin-transit-pulse}
       BTP_PG_HOST: postgres
       BTP_PG_SCHEDULE_PASSWORD: ${BTP_PG_SCHEDULE_PASSWORD:-dev_schedule}

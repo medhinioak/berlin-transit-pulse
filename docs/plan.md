@@ -16,12 +16,12 @@ pull request.
 - Tasks are GitHub issues, one GitHub milestone per release plus "Alternatives" and
   "After launch". **GitHub is the source of truth for status**; the table below is a snapshot.
 
-## Status snapshot, 2026-11-20
+## Status snapshot, 2026-11-21
 
 | Milestone | Release | Target | Issues closed / open | State |
 | --- | --- | --- | --- | --- |
-| M1 Walking skeleton | v0.1 | 2026-11-30 | 15 / 3 | Open: #10 minimal web page, #13 Terraform state bucket, #14 tag v0.1 |
-| M2 Collecting 24/7 in AWS | v0.2 | 2026-12-07 | 0 / 8 | Not started |
+| M1 Walking skeleton | v0.1 | 2026-11-30 | 17 / 1 | Exit criteria met (milestone gate 2026-11-21); open: #14 tag v0.1 |
+| M2 Collecting 24/7 in AWS | v0.2 | 2026-12-07 | 0 / 9 | Not started |
 | M3 Trustworthy metrics | v0.3 | 2026-12-21 | 0 / 10 | Not started |
 | M4 Public beta | v0.9 | 2027-01-10 | 0 / 8 | Not started |
 | M5 v1.0 launch | v1.0 | 2027-01-17 | 0 / 6 | Not started |
@@ -42,13 +42,36 @@ A thin version of the whole pipeline runs locally.
 - AWS account baseline: MFA on root, admin user, budgets at $5, $15 and $20 (#12), and the
   Terraform state bucket (#13). See [`aws-account.md`](aws-account.md).
 
+Exit criteria, checked at the milestone gate on 2026-11-21 (#14):
+
+- [x] From a fresh clone, `make install && make up` shows live values at http://localhost:8080
+  with no undocumented manual steps (fixtures mode, no network needed). Checked from a fresh
+  clone; `schedule-import` now defaults to fixtures like the other services.
+- [x] CI green on main: lint, type check, unit tests, image builds and the end-to-end smoke
+  test (`scripts/smoke.sh`, which also runs the integration tests).
+- [x] Services own their data: separate Postgres schemas and roles; the API is read-only
+  (`libs/common/tests/test_platform_integration.py`,
+  `services/metrics-api/tests/test_api_integration.py`).
+- [x] Kafka carries only changed trips; consumer writes are idempotent, tested
+  (`services/ingest/tests/test_publish.py`,
+  `services/stop-event-processor/tests/test_processor_integration.py`).
+- [x] Feed etiquette proven by tests: at most 6 requests per minute, gzip, ETag, User-Agent with
+  contact (`services/ingest/tests/test_feed.py`).
+- [x] S-Bahn scope decided: S-Bahn stays in v1 after the rush-hour feed check on 2026-11-18
+  (#1; [`spec.md`](spec.md) Modes, [ADR-0017](adr/0017-define-berlin-and-mode-from-stop-ids-and-route-types.md)).
+- [x] AWS account baseline done and the Terraform state bucket applied (#12, #13). Changed from
+  the plan: an IAM admin user with MFA instead of IAM Identity Center, which needs AWS
+  Organizations ([`aws-account.md`](aws-account.md#why-an-iam-user-not-iam-identity-center)).
+  AWS bill at the gate: about €0.
+- [ ] Tag v0.1 and GitHub Release published (after #14 is merged).
+
 ### M2 Collecting 24/7 in AWS: v0.2, target 2026-12-07
 
 - Terraform release stack: EC2 with an Elastic IP and a reverse DNS name, S3 with lifecycle
   rules, IAM, SSM and CloudFront (#15, #16, #17).
 - GitHub Actions: tests, arm64 images to GHCR, deploy through SSM (#18).
 - Raw snapshots every 5 minutes to S3 (#19). Memory use measured on the real server (#20).
-- Fixtures mode survives the timetable change (#75).
+- Fixtures mode survives the timetable change (#75; the compose default moved to fixtures in v0.1).
 - Public URL showing live counts (#21).
 - A runbook for deploy, roll back, restore and shut down.
 

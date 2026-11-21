@@ -1,5 +1,6 @@
-# Lint, type check, unit tests and image builds. Each job calls the Makefile target, so CI and
-# local runs stay identical. No secrets, and no calls to the VBB feed: tests use fixtures/.
+# Lint, type check, unit tests, image builds and the end-to-end smoke test. Each job calls the
+# Makefile target (or scripts/smoke.sh), so CI and local runs stay identical. No secrets, and
+# no calls to the VBB feed: tests use fixtures/.
 name: CI
 
 on:
@@ -106,3 +107,26 @@ jobs:
         run: |
           echo "image builds: ${{ needs.image.result }}"
           test "${{ needs.image.result }}" = "success"
+
+  # End to end on the compose stack in fixtures mode (no network to VBB): /health, live values
+  # for at least two modes, the web page with attribution, then the integration tests against
+  # the running stack. scripts/smoke.sh stops the stack and removes its volumes.
+  smoke:
+    needs: docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - run: scripts/smoke.sh make test-integration
+        # Below the job timeout, so the log step still runs if `make up` hangs.
+        timeout-minutes: 12
+      - name: Logs and cleanup after a timeout
+        if: ${{ failure() || cancelled() }}
+        run: |
+          docker compose -p btp-smoke -f deploy/compose/compose.yaml logs --tail=200
+          docker compose -p btp-smoke -f deploy/compose/compose.yaml down -v

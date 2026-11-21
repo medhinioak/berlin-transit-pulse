@@ -40,7 +40,7 @@ lives in the repository: issues, ADRs, these docs and the troubleshooting log.
 1. Read [`README.md`](../README.md), then the [documentation index](README.md) in its order:
    spec, architecture, plan. Then read the README of the service you will touch.
 2. Run it locally with recorded data and no network access: `make install`, then
-   `BTP_FEED_MODE=fixtures make up`, then `make test`. Details are in the root README.
+   `make up` (fixtures mode by default), then `make test`. Details are in the root README.
 3. Pick an issue in the current milestone. Every issue should have acceptance criteria; if one
    does not, ask the maintainer before starting.
 4. You do not need AWS access for service work. Infrastructure changes come as Terraform in a

@@ -97,12 +97,12 @@ a Postgres restart pays for an empty cache; the 500 ms target (#9) holds once wa
   the active schedule version. Trips of the previous service day still running after
   midnight keep their old trip_ids, so after the new version is activated they drop out
   until they finish. Handling version swaps is for M3, with the weekly refresh (#24).
-- **Fixtures against the live timetable**: `make up` replays fixture trips from 2026-11-18,
-  but `schedule-import` imports the live static GTFS by default (`BTP_FEED_MODE` defaults to
-  `live` there, to `fixtures` in ingest and metrics-api). It works while the live GTFS still
-  contains those trip_ids. After the timetable change on 2026-12-13 it no longer will, and the
-  fixtures-mode endpoint and its integration test come back empty. Running everything with
-  `BTP_FEED_MODE=fixtures` (the mini GTFS matches the fixtures) avoids it.
+- **Mixed modes**: compose runs every service in fixtures mode by default, and the mini GTFS
+  matches the fixture trips. Importing the live static GTFS while replaying fixtures works only
+  while the live GTFS still contains the 2026-11-18 trip_ids; after the timetable change on
+  2026-12-13 the fixtures-mode endpoint comes back empty. Set `BTP_FEED_MODE` for the whole
+  stack, not per service. Switching modes on an existing volume can leave the wrong schedule
+  version active (#75).
 - **No retention yet** (M3): `max(feed_ts)` in `v_feed_status` and the `service_date` filter
   on `trip_state` are sequential scans. They take ~20 ms at ~80k rows (one day) and grow with
   every day kept. Retention or an index on `trip_state` (processor schema) comes before it

@@ -7,7 +7,7 @@ Thanks for helping. This page is the short version; the full process is in
 
 ```sh
 make install                       # needs uv and Docker; see the README
-BTP_FEED_MODE=fixtures make up     # the whole stack, offline
+make up                            # the whole stack, offline (fixtures)
 make test
 ```
 
