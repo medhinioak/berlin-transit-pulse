@@ -9,7 +9,7 @@ output "public_ip" {
 }
 
 output "public_dns" {
-  description = "Public DNS name of the Elastic IP (the CloudFront origin in #17)."
+  description = "Public DNS name of the Elastic IP (the CloudFront origin of /api/*)."
   value       = aws_eip.server.public_dns
 }
 
@@ -34,11 +34,26 @@ output "web_bucket_name" {
 }
 
 output "web_bucket_arn" {
-  description = "ARN of the web bucket (for the CloudFront OAC bucket policy in #17)."
+  description = "ARN of the web bucket."
   value       = aws_s3_bucket.web.arn
 }
 
 output "web_bucket_regional_domain_name" {
-  description = "Regional domain name of the web bucket (the CloudFront origin in #17)."
+  description = "Regional domain name of the web bucket (the CloudFront origin of the page)."
   value       = aws_s3_bucket.web.bucket_regional_domain_name
+}
+
+output "cloudfront_domain_name" {
+  description = "The site's public domain (https://<this>/)."
+  value       = aws_cloudfront_distribution.main.domain_name
+}
+
+output "cloudfront_distribution_id" {
+  description = "ID of the CloudFront distribution (target of cache invalidations in #18)."
+  value       = aws_cloudfront_distribution.main.id
+}
+
+output "cloudfront_distribution_arn" {
+  description = "ARN of the CloudFront distribution (for the CD role's invalidation permission in #18)."
+  value       = aws_cloudfront_distribution.main.arn
 }

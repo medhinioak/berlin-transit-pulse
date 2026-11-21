@@ -16,7 +16,7 @@ is no DynamoDB table.
 | Stack | Folder | State key | Status |
 | --- | --- | --- | --- |
 | bootstrap | `bootstrap/` | `bootstrap/terraform.tfstate` | The state bucket itself (#13) |
-| release | `release/` | `release/terraform.tfstate` | M2, #15: network, EC2, IAM, SSM parameters ([README](release/README.md)) |
+| release | `release/` | `release/terraform.tfstate` | M2: network, EC2, IAM, SSM parameters (#15), S3 buckets (#16), CloudFront (#17) ([README](release/README.md)) |
 | poc | `aws-microservices/` | `poc/aws-microservices/terraform.tfstate` | Alternative, never needed by the release path |
 | poc | `eks/` | `poc/eks/terraform.tfstate` | Alternative, never needed by the release path |
 

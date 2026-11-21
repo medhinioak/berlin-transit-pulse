@@ -1,7 +1,9 @@
 # S3 buckets of the release stack: a data bucket for raw feed snapshots, Parquet history and
-# backups, and a web bucket for the static site that CloudFront serves (#17).
+# backups, and a web bucket for the static site that CloudFront serves (cloudfront.tf).
 # Both are private, SSE-S3 encrypted, TLS-only, with object ownership enforced (no ACLs).
-# Versioning stays off: object keys are unique and the instance role cannot delete.
+# Versioning stays off: the instance role cannot delete, and backups/ refuses overwrites
+# (If-None-Match, iam.tf). raw/ has no such guard; a reused key there is overwritten, and
+# expires within 15 days anyway.
 
 locals {
   data_bucket_name = "btp-data-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
@@ -109,7 +111,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
 }
 
 # --- Web bucket: the static site. Not a website endpoint; CloudFront reads it through
-# Origin Access Control (#17). The CD role (#18) writes it. ---
+# Origin Access Control (cloudfront.tf). The CD role (#18) writes it. ---
 
 resource "aws_s3_bucket" "web" {
   bucket = local.web_bucket_name
@@ -142,10 +144,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "web" {
   }
 }
 
-# #17 adds the statement that lets CloudFront (OAC) read objects to this document.
+# TLS only, and reads by this stack's CloudFront distribution through OAC (cloudfront.tf).
 # CloudFront fetches from an S3 origin with the viewer's protocol, so the distribution must
 # use viewer_protocol_policy redirect-to-https or https-only: with allow-all, HTTP viewers
 # get 403 from the TLS-only statement below.
+# Without s3:ListBucket, CloudFront gets 403 (not 404) for a missing key.
 data "aws_iam_policy_document" "web_bucket" {
   statement {
     sid     = "DenyInsecureTransport"
@@ -167,6 +170,24 @@ data "aws_iam_policy_document" "web_bucket" {
       values   = ["false"]
     }
   }
+
+  statement {
+    sid       = "AllowCloudFrontOAC"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.web.arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.main.arn]
+    }
+  }
 }
 
 resource "aws_s3_bucket_policy" "web" {
@@ -175,4 +196,20 @@ resource "aws_s3_bucket_policy" "web" {
 
   # S3 rejects a bucket policy while the public access block is still being applied.
   depends_on = [aws_s3_bucket_public_access_block.web]
+}
+
+# The CD role (#18) uploads here; an interrupted upload would otherwise leave billed parts behind.
+resource "aws_s3_bucket_lifecycle_configuration" "web" {
+  bucket = aws_s3_bucket.web.id
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
 }

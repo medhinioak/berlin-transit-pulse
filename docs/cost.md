@@ -20,7 +20,7 @@ for Stockholm yet; they are small and are checked in the M5 cost review (#42).
 | EBS gp3 disk | 30 GB × $0.0836 per GB-month (Kafka 24 h retention, Postgres 30 days, swap); baseline IOPS and throughput are included | 2.51 |
 | S3 raw snapshots | 1 snapshot every 5 min × 2.3 MB, deleted after 14 days (about 9 GB stored) | ~0.25 |
 | S3 Parquet history and backups | Grows about 1–3 GB per month | ~0.10 |
-| CloudFront, CloudWatch (10 custom metrics), SNS email | Within the always-free allowances | 0.00 |
+| CloudFront, CloudWatch (10 custom metrics), SNS email | Within the always-free allowances (CloudFront: 1 TB out and 10 million requests a month; origin fetches from S3 and EC2 are free) | 0.00 |
 | Route 53 hosted zone (optional, plus about €10–15 per year for a domain) | 1 zone | 0.50 |
 | **Total** | | **~19.57** |
 

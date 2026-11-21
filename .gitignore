@@ -235,3 +235,6 @@ CLAUDE.local.md
 
 # Full feed snapshots and the static GTFS zip (#4); only trimmed fixtures are committed.
 fixtures/local/
+
+# Swagger UI files, added by the metrics-api image build (services/metrics-api/Dockerfile).
+services/metrics-api/src/btp_metrics_api/docs_assets/vendor/
