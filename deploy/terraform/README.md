@@ -56,12 +56,16 @@ local state and then migrates it.
    once `backend.tf` exists, every command except `init` fails until the backend is initialised.
 
    ```bash
-   BUCKET=$(terraform -chdir=deploy/terraform/bootstrap output -raw state_bucket_name)
-   git mv deploy/terraform/bootstrap/backend.tf.example deploy/terraform/bootstrap/backend.tf
-   terraform -chdir=deploy/terraform/bootstrap init -migrate-state -backend-config="bucket=$BUCKET"
+   # Chained with && so nothing runs if the bucket name comes back empty.
+   BUCKET=$(terraform -chdir=deploy/terraform/bootstrap output -raw state_bucket_name) &&
+     test -n "$BUCKET" &&
+     git mv deploy/terraform/bootstrap/backend.tf.example deploy/terraform/bootstrap/backend.tf &&
+     terraform -chdir=deploy/terraform/bootstrap init -migrate-state -backend-config="bucket=$BUCKET"
    ```
 
-   Answer `yes` to copy the existing state.
+   Answer `yes` to copy the existing state. If an earlier attempt already renamed the file,
+   `terraform output` fails and `$BUCKET` is empty: rename `backend.tf` back to
+   `backend.tf.example` and start this step again.
 5. `terraform -chdir=deploy/terraform/bootstrap state list` lists the 6 resources. Then delete
    the local `terraform.tfstate` and `terraform.tfstate.backup` in `deploy/terraform/bootstrap/`
    and commit `backend.tf`.
