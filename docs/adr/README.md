@@ -13,6 +13,7 @@ when to write one: [`../process.md`](../process.md#writing-an-adr).
 | [0017](0017-define-berlin-and-mode-from-stop-ids-and-route-types.md) | Define "in Berlin" by DHID state code and mode by route type | Accepted |
 | [0018](0018-use-eu-north-1-and-an-iam-user-with-aws-login.md) | Use eu-north-1 and an IAM user with `aws login` on the Free plan | Accepted |
 | [0019](0019-pin-the-reference-time-of-live-views-with-a-session-setting.md) | Pin the reference time of live views with a session setting | Accepted |
+| [0020](0020-run-the-release-on-one-t4g-small-with-no-ssh.md) | Run the release on one t4g.small with no SSH | Accepted |
 
 ## Planned
 

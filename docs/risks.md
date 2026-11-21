@@ -34,7 +34,7 @@ confirmed. Added: fixtures mode and the timetable change.
 
 | Risk | Likelihood | Mitigation |
 | --- | --- | --- |
-| **Kafka and Postgres too big for 2 GB of RAM** | Medium | Measure at M2 (#20). Tuned heaps and 2 GB swap. Fallback: t4g.medium, or move Postgres off the box |
+| **Kafka and Postgres too big for 2 GB of RAM** | Medium | Measure at M2 (#20). Tuned heaps and 1 GB swap. Fallback: t4g.medium, or move Postgres off the box |
 | **Instance or disk loss** | Low | Nightly `pg_dump` and Parquet in S3. Terraform rebuild in under 30 minutes |
 | **Cost overrun** | Low | Budgets, anomaly detection, S3 lifecycle rules, no NAT gateway or load balancer ([cost](cost.md)) |
 | **AWS Free plan ends** around mid-May 2027 or when credits run out, and some services may not be on it | Scheduled | Upgrade to the Paid plan before then. Check MSK availability before the proof-of-concept issue ([cost](cost.md#credits-and-the-free-plan)) |

@@ -1,0 +1,61 @@
+#!/bin/bash
+# First-boot setup of the release server (Amazon Linux 2023, arm64): Docker with log rotation,
+# the Docker Compose plugin, 1 GB of swap and /opt/btp. Rendered by Terraform (ec2.tf).
+# Idempotent: running it again changes nothing. Output: /var/log/cloud-init-output.log
+set -euxo pipefail
+
+# The subnet assigns no public address: the instance gets one when Terraform attaches the
+# Elastic IP, shortly after boot. Wait for the internet (up to 10 minutes) before installing.
+for attempt in $(seq 1 120); do
+  if curl -fsS --max-time 5 -o /dev/null https://github.com; then
+    break
+  fi
+  if [ "$attempt" -eq 120 ]; then
+    echo "no internet access after 10 minutes" >&2
+    exit 1
+  fi
+  sleep 5
+done
+
+# Docker and git from the Amazon Linux repositories.
+dnf install -y docker git
+
+# Docker log rotation, written before Docker starts so every container gets it.
+install -d -m 0755 /etc/docker
+cat > /etc/docker/daemon.json <<'JSON'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+JSON
+systemctl enable --now docker
+
+# Docker Compose plugin, pinned and checksum-verified.
+plugin_dir=/usr/local/lib/docker/cli-plugins
+install -d -m 0755 "$plugin_dir"
+if ! echo "${compose_sha256}  $plugin_dir/docker-compose" | sha256sum -c --quiet 2>/dev/null; then
+  tmp=$(mktemp)
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$tmp" \
+    "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-aarch64"
+  echo "${compose_sha256}  $tmp" | sha256sum -c
+  install -m 0755 "$tmp" "$plugin_dir/docker-compose"
+  rm -f "$tmp"
+fi
+docker compose version
+
+# 1 GB swap file with low swappiness: a safety margin on 2 GB of RAM, not working memory.
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 600 /swapfile
+  mkswap /swapfile
+fi
+swapon --show=NAME --noheadings | grep -qx /swapfile || swapon /swapfile
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap defaults 0 0' >> /etc/fstab
+echo 'vm.swappiness=10' > /etc/sysctl.d/90-btp-swap.conf
+sysctl --system
+
+# Where the deploy (#18) puts the compose files.
+install -d -o root -g root -m 0755 /opt/btp

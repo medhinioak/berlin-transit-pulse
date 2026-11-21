@@ -7,25 +7,26 @@ states the estimated € difference in its pull request.
 
 ## Release baseline
 
-The baseline needs no AWS credits. Prices are on-demand. Rows marked `~` are estimates.
+The baseline needs no AWS credits. Prices are on-demand, for Stockholm (`eu-north-1`,
+[ADR-0018](adr/0018-use-eu-north-1-and-an-iam-user-with-aws-login.md)). The first three rows
+were checked on 2026-11-21 against the AWS public price list (EC2 and VPC offer files for
+`eu-north-1`, published that day). Rows marked `~` are estimates that have not been re-priced
+for Stockholm yet; they are small and are checked in the M5 cost review (#42).
 
 | Item | Sizing | USD per month |
 | --- | --- | ---: |
-| EC2 t4g.small | $0.0192 per hour × 730 h | 14.00 |
-| Public IPv4 (Elastic IP) | ~$0.005 per hour | ~3.65 |
-| EBS gp3 disk | 30 GB (Kafka 24 h retention, Postgres 30 days, swap) | ~2.90 |
+| EC2 t4g.small | $0.0172 per hour × 730 h, standard CPU credits ([ADR-0020](adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md)) | 12.56 |
+| Public IPv4 (Elastic IP) | $0.005 per hour × 730 h | 3.65 |
+| EBS gp3 disk | 30 GB × $0.0836 per GB-month (Kafka 24 h retention, Postgres 30 days, swap); baseline IOPS and throughput are included | 2.51 |
 | S3 raw snapshots | 1 snapshot every 5 min × 2.3 MB, deleted after 14 days (about 9 GB stored) | ~0.25 |
 | S3 Parquet history and backups | Grows about 1–3 GB per month | ~0.10 |
 | CloudFront, CloudWatch (10 custom metrics), SNS email | Within the always-free allowances | 0.00 |
 | Route 53 hosted zone (optional, plus about €10–15 per year for a domain) | 1 zone | 0.50 |
-| **Total** | | **~21.40** |
+| **Total** | | **~19.57** |
 
-That is roughly €18.50, just under the ceiling.
-
-**These prices were worked out for Frankfurt (`eu-central-1`).** The account's region is
-`eu-north-1` ([ADR-0018](adr/0018-use-eu-north-1-and-an-iam-user-with-aws-login.md)), so the
-table must be re-priced in the AWS Pricing Calculator during M2 and again in the M5 cost review
-(#42).
+That is roughly €17.80 (at $1 = €0.91, 2026-11-20), under the ceiling. The server alone (the
+first three rows, the release stack from #15) is $18.72, about €17.00. Data transfer out is
+not in the table: CloudFront serves the site, and the server's own traffic out is small.
 
 ## Keeping spend low
 
@@ -80,8 +81,7 @@ the cost ceiling.
 
 ## Open items
 
-- Re-price the baseline for `eu-north-1` (M2).
-- The $20 budget alert sits below the baseline estimate of about $21.40. The alerts are in USD
-  and the ceiling is in EUR, so decide whether the thresholds should move or the estimate
-  should come down.
+- The $20 budget alert sits just above the baseline estimate of about $19.60, so ordinary
+  variation (data transfer, a busier month for S3) can trip it. The alerts are in USD and the
+  ceiling is in EUR; check against the real bill in #21 before moving the thresholds.
 - Retention of the nightly `pg_dump` backups is not decided (#28).

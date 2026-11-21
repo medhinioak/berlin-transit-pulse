@@ -171,7 +171,7 @@ The same container images run on all of these.
 | Target | Runs on | Lifecycle | Cost |
 | --- | --- | --- | --- |
 | **Local** | `docker compose` on a developer machine; fixtures replace the live feed | Any time | none |
-| **Release** | `docker compose` on one EC2 t4g.small (2 vCPU, 2 GB RAM, arm64), Terraform in `deploy/terraform/release` | Live from M2 | about $21 per month ([cost](cost.md)) |
+| **Release** | `docker compose` on one EC2 t4g.small (2 vCPU, 2 GB RAM, arm64), Terraform in `deploy/terraform/release` | Live from M2 | about $19.60 per month ([cost](cost.md)) |
 | **Microservices proof of concept** | ECS Fargate (one service per container), MSK Serverless, RDS Postgres, an Application Load Balancer, public subnets and no NAT gateway; `deploy/terraform/aws-microservices` | `terraform apply`, run a few hours against the live feed, capture screenshots and metrics, `terraform destroy` | about $1 per hour, $4–6 per run (estimate) |
 | **Kubernetes reference** | Helm chart tested on a local `kind` cluster in CI; EKS Terraform module checked with `terraform plan` only | Never deployed | $0 |
 
@@ -192,13 +192,13 @@ The release server has 2 GB of RAM. The design target:
 | Postgres | about 400 MB |
 | Python services | about 400 MB |
 | Operating system | about 300 MB |
-| Swap | 2 GB |
+| Swap | 1 GB, `vm.swappiness=10`: a margin, not working memory ([ADR-0020](adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md)) |
 
 Measured so far, on a development machine in fixtures mode (2026-11-19): about 800 MB in total
 (Kafka about 568 MB, Postgres about 110 MB, metrics-api about 48 MB, ingest and processor about
 33 and 46 MB). The compose container limits add up to 1,984 MB for the long-running services,
 which is a ceiling, not a use. **Not yet measured on the real t4g.small** (#20, M2). If it does
-not fit, the fallback is a t4g.medium (about +$17 per month) or moving Postgres off the box.
+not fit, the fallback is a t4g.medium (about +$12.50 per month) or moving Postgres off the box.
 Every new service needs a limit that fits next to the others.
 
 ## Data quality
