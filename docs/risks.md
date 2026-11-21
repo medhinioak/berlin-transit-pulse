@@ -10,6 +10,9 @@ added on 2026-11-20 from other project documents are the two "Present" data risk
 plan, static GTFS disk growth and the single maintainer; their ratings are an assessment, to be
 confirmed at the next milestone gate. "Present" means the problem has already been observed.
 
+Last review: 2026-11-21, M1 gate (#14). The ratings of the rows added on 2026-11-20 are
+confirmed. Added: fixtures mode and the timetable change.
+
 ## Data
 
 | Risk | Likelihood | Mitigation |
@@ -21,6 +24,7 @@ confirmed at the next milestone gate. "Present" means the problem has already be
 | **Measurement validity.** "Observed" means the last prediction before the stop time, not a measured arrival | Medium | State it on the methodology page. Check against BVG's yearly figures and live departures. Record it in an ADR |
 | **GTFS time quirks:** times past 24:00, service days, daylight-saving changes | Medium | Use the GTFS service date throughout. Unit tests for after-midnight trips and DST |
 | **Schema or format changes:** new fields, a switch to differential mode, extensions | Low | Protobuf ignores unknown fields. Contract tests on fixtures. Alerts on unexpected entity counts or missing fields |
+| **Fixtures mode breaks at the timetable change or on a mode switch.** The local stack, the integration tests and the CI smoke test replay 2026-11-18 data | Medium | Compose defaults every service to fixtures, with the mini GTFS that matches the fixtures (v0.1). Switching modes on one volume and failing loudly are #75 (M2). The CI smoke test catches an empty result on every PR |
 | **Rate limiting or blocking** (7 requests per minute; generic User-Agents blocked) | Low | Poll twice a minute with ETag and gzip, User-Agent with contact details, reverse DNS on the Elastic IP, back off on 429 and 5xx |
 | **Licensing (CC BY 4.0)** | Low | Attribution on every page and in the README. The methodology page names the sources. No public live mirror of the raw feed |
 | **Realtime stop IDs missing from the static data** (about 1.3% of updates) | Present | Match by `stop_sequence` within the trip, not by `stop_id` ([troubleshooting](troubleshooting.md#realtime-stop_ids-that-arent-in-the-static-gtfs)) |
