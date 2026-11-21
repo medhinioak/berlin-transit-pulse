@@ -39,7 +39,7 @@ exits. `make up` waits for it. Services that read the schedule depend on it with
 | `BTP_SCHEDULE_CACHE_DIR` | `~/.cache/btp-schedule` (`/cache` in the image) | downloaded zip |
 | `BTP_SCHEDULE_MAX_AGE_HOURS` | `24` | a cached zip younger than this is used without a request |
 | `BTP_FEED_CONTACT` | the repo URL | contact in the User-Agent |
-| `BTP_FEED_MODE` | `live` | `fixtures` imports the mini GTFS |
+| `BTP_FEED_MODE` | `live` (compose: `fixtures`) | `fixtures` imports the mini GTFS |
 
 VBB's download sends no ETag or Last-Modified, so the cache can't be revalidated cheaply. Every
 request transfers the full ~84 MB. That's why a fresh cache is used without asking. A 304

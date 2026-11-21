@@ -4,8 +4,8 @@
 2 GB RAM, arm64). The services are added to the same file by their own issues.
 
 ```sh
-make up            # start, wait until healthy and the schedule is imported
-BTP_FEED_MODE=fixtures make up   # same, offline: schedule from fixtures/
+make up            # start offline (fixtures), wait until healthy and the schedule is imported
+BTP_FEED_MODE=live make up   # same, but download the static GTFS and poll the live feed
 make ps            # containers and health
 make kafka-topics  # describe topics
 make psql          # psql as the superuser
@@ -20,7 +20,7 @@ make down          # stop, keep data
 | `kafka` | `apache/kafka:4.4.0` | One broker in KRaft mode (broker and controller in one process, no ZooKeeper) |
 | `kafka-init` | `apache/kafka:4.4.0` | Creates the topics, then exits 0. Safe to re-run (`--if-not-exists`) |
 | `postgres` | `postgres:16.16` | Database `btp` with one schema per writing service |
-| `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. `BTP_FEED_MODE=fixtures` imports the mini GTFS offline (see `services/schedule/README.md`) |
+| `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. Imports the mini GTFS offline by default; `BTP_FEED_MODE=live` downloads the VBB static GTFS (see `services/schedule/README.md`) |
 | `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 30 s stop grace period |
 | `stop-event-processor` | `services/stop-event-processor/Dockerfile` | Consumes `trip-updates` and keeps the latest prediction per trip and stop in `events.trip_state` and `events.stop_predictions` as `btp_processor` ([README](../../services/stop-event-processor/README.md)). 256 MB limit |
 | `metrics-jobs-apply` | `services/metrics-jobs/Dockerfile` | Creates or replaces the `marts` views as `btp_metrics_jobs`, then exits 0. Waits up to 60 s for the processor's tables ([README](../../services/metrics-jobs/README.md)) |
