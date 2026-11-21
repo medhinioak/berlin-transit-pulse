@@ -8,7 +8,7 @@ BVG publishes per-line punctuality once a year. This project turns the live feed
 continuously updated picture: on-time rate, delays, cancellations and headway regularity per
 line, stop and hour, for buses, trams, the U-Bahn, the S-Bahn and regional trains in Berlin.
 
-**Status: v0.1, local walking skeleton (2026-11-21).** The pipeline runs end to end on a
+**Status: [v0.1](https://github.com/medhinioak/berlin-transit-pulse/releases/tag/v0.1), local walking skeleton (2026-11-21).** The pipeline runs end to end on a
 developer machine, from recorded feed snapshots to a read-only API and one page showing the
 current delay by mode. It is a live indicator, not yet a punctuality rate. Nothing is deployed
 to AWS yet and there is no public site. The first public release, v1.0, is targeted for
