@@ -122,11 +122,16 @@ does not use Postgres. Details: [compose README](../deploy/compose/README.md#sch
 
 ### S3
 
-| Prefix | Content | Retention |
-| --- | --- | --- |
-| Raw snapshots | One feed snapshot every 5 minutes (about 2.3 MB each) | 14 days, by lifecycle rule (about 9 GB stored) |
-| Parquet history | Finalised stop events, partitioned by date and mode | Kept; grows about 1–3 GB per month |
-| Backups | Nightly `pg_dump` (#28) | Not decided yet |
+Two private buckets in the release stack, created by Terraform (#16) and empty until the
+uploads below exist ([release README](../deploy/terraform/release/README.md#buckets)).
+`<account-id>` is the AWS account ID.
+
+| Bucket and prefix | Content | Retention | Status |
+| --- | --- | --- | --- |
+| `btp-data-<account-id>-eu-north-1/raw/vbb-rt/` | One feed snapshot every 5 minutes (about 2.3 MB each) | 14 days, by lifecycle rule (about 9 GB stored) | Bucket and lifecycle rule **Built** (#16); uploads planned (#19) |
+| `btp-data-<account-id>-eu-north-1/history/` | Finalised stop events as Parquet, partitioned by date and mode | Kept; grows about 1–3 GB per month | Planned (M3/M4) |
+| `btp-data-<account-id>-eu-north-1/backups/` | Nightly `pg_dump`; existing keys can't be overwritten | Kept for now; #28 decides retention | Bucket and write guard **Built** (#16); dumps planned (#28) |
+| `btp-web-<account-id>-eu-north-1` | Static site, served by CloudFront | Replaced on deploy | Bucket **Built** (#16); CloudFront planned (#17), deploy (#18) |
 
 Terraform state lives in its own bucket (#13).
 

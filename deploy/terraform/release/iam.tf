@@ -1,5 +1,5 @@
-# Instance role: SSM Session Manager and Run Command, plus reading this stack's SSM
-# parameters. S3 permissions are added by #16 and #19.
+# Instance role: SSM Session Manager and Run Command, reading this stack's SSM parameters,
+# and writing (never deleting) raw snapshots and backups in the data bucket (s3.tf).
 
 data "aws_caller_identity" "current" {}
 
@@ -48,6 +48,66 @@ resource "aws_iam_role_policy" "server_parameters" {
   name   = "read-release-parameters"
   role   = aws_iam_role.server.id
   policy = data.aws_iam_policy_document.server_parameters.json
+}
+
+# Write-only access to raw/ (snapshots, #19) and backups/ (pg_dump, #28). No DeleteObject:
+# raw snapshots expire through the lifecycle rule. No access to the web bucket (CD role, #18).
+# s3:PutObject also covers multipart uploads.
+data "aws_iam_policy_document" "server_s3" {
+  statement {
+    sid       = "WriteRaw"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data.arn}/raw/*"]
+  }
+
+  # Versioning is off, so an overwrite would lose a backup for good. PutObject and
+  # CompleteMultipartUpload into backups/ must send If-None-Match: * (S3 then refuses an
+  # existing key with 412). Plain `aws s3 cp` doesn't send it; use
+  # `aws s3api put-object --if-none-match '*'`. The pattern follows the AWS guide
+  # "Enforce conditional writes on Amazon S3 buckets".
+  statement {
+    sid       = "CreateBackupsOnly"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data.arn}/backups/*"]
+
+    condition {
+      test     = "Null"
+      variable = "s3:if-none-match"
+      values   = ["false"]
+    }
+  }
+
+  # CreateMultipartUpload, UploadPart and UploadPartCopy can't carry the header; the
+  # upload still only lands through a CompleteMultipartUpload with If-None-Match.
+  statement {
+    sid       = "BackupMultipartParts"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data.arn}/backups/*"]
+
+    condition {
+      test     = "Bool"
+      variable = "s3:ObjectCreationOperation"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid       = "ListRawAndBackups"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.data.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["raw/*", "backups/*"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "server_s3" {
+  name   = "write-data-bucket"
+  role   = aws_iam_role.server.id
+  policy = data.aws_iam_policy_document.server_s3.json
 }
 
 resource "aws_iam_instance_profile" "server" {
