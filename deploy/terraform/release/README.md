@@ -9,14 +9,14 @@ Conventions for all stacks: [`../README.md`](../README.md).
 
 ## What it creates
 
-41 resources:
+42 resources:
 
 | File | Resources |
 | --- | --- |
 | `network.tf` | VPC `10.20.0.0/16`, one public subnet `10.20.1.0/24` in `eu-north-1a`, internet gateway, route table, default route, association; a security group with all outbound and no inbound rules of its own (`cloudfront.tf` adds port 80 from CloudFront) |
 | `iam.tf` | Instance role with `AmazonSSMManagedInstanceCore`, read access to the parameters under `/btp/release/` and write-only access to the data bucket's `raw/` and `backups/`; instance profile |
 | `ec2.tf` | t4g.small (Amazon Linux 2023, arm64), standard CPU credits, IMDSv2 with hop limit 2, 30 GB encrypted gp3 root volume, no key pair; an Elastic IP |
-| `s3.tf` | Data bucket `btp-data-<account-id>-eu-north-1` with lifecycle rules, web bucket `btp-web-<account-id>-eu-north-1`; each with public access block, `BucketOwnerEnforced`, SSE-S3 and a TLS-only bucket policy; the web bucket's policy also lets the distribution read objects |
+| `s3.tf` | Data bucket `btp-data-<account-id>-eu-north-1` with lifecycle rules, web bucket `btp-web-<account-id>-eu-north-1` with a rule aborting incomplete uploads; each with public access block, `BucketOwnerEnforced`, SSE-S3 and a TLS-only bucket policy; the web bucket's policy also lets the distribution read objects |
 | `cloudfront.tf` | Distribution with an S3 origin (Origin Access Control) and the instance as `/api/*` origin, a response headers policy for the page, and the security group rule for port 80 from CloudFront's origin-facing prefix list |
 | `secrets.tf` | Five generated Postgres passwords as SecureString parameters `/btp/release/pg/{superuser,processor,schedule,metrics_jobs,api}`; the feed contact as `/btp/release/feed_contact` |
 
@@ -43,7 +43,7 @@ cannot delete, and it cannot overwrite a backup (see below). The account ID in t
 | `btp-data-…` | `backups/` | Nightly `pg_dump` (#28) | Kept for now; #28 decides retention | Instance role |
 | `btp-web-…` | | Static site; CloudFront reads it through Origin Access Control (#17), not a website endpoint | Replaced on deploy | CD role (#18) |
 
-Incomplete multipart uploads in the data bucket are aborted after 1 day. The instance role
+Incomplete multipart uploads in both buckets are aborted after 1 day. The instance role
 has `s3:PutObject` on `raw/*` and `backups/*` and `s3:ListBucket` limited to those prefixes:
 no `DeleteObject`, nothing on `history/` or the web bucket. Listing needs the trailing slash
 (`aws s3 ls s3://$BUCKET/backups/`); `…/backups` or the bucket root is AccessDenied.
@@ -85,8 +85,8 @@ domain and certificate, `PriceClass_100`, HTTP/2 and HTTP/3). HTTP redirects to 
 
 | Path | Origin | Cache | Response headers |
 | --- | --- | --- | --- |
-| `/api/*` | Instance's public DNS name, HTTP on port 80, to nginx, then metrics-api. 10 s connect and read timeouts | `UseOriginCacheControlHeaders-QueryStrings`: as long as the API's `Cache-Control` says (`max-age=30`), keyed on the query string. All viewer headers except `Host` are forwarded. GET, HEAD, OPTIONS | Managed `SecurityHeadersPolicy` |
-| everything else | Web bucket through Origin Access Control; `index.html` is the root object | `CachingOptimized`: up to a day when the object has no `Cache-Control` | `btp-release-web`: the managed policy's headers plus nginx's CSP and `Referrer-Policy: no-referrer` |
+| `/api/*` | Instance's public DNS name, HTTP on port 80, to nginx, then metrics-api. 10 s connect and read timeouts | `UseOriginCacheControlHeaders-QueryStrings`: as long as the API's `Cache-Control` says (`max-age=30`), keyed on the query string. All viewer headers except `Host` are forwarded. GET and HEAD only (no CORS: the page is same-origin) | Managed `SecurityHeadersPolicy` |
+| everything else | Web bucket through Origin Access Control; `index.html` is the root object | `CachingOptimized`: up to a day when the object has no `Cache-Control` | `btp-release-web`: nginx's CSP, `Referrer-Policy: no-referrer`, HSTS, nosniff and `X-Frame-Options: DENY` |
 
 - **Origin protection.** Port 80 on the instance accepts only CloudFront's origin-facing
   ranges (managed prefix list `com.amazonaws.global.cloudfront.origin-facing`); nothing else is

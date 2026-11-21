@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-21
 - Decider: Maintainer (@medhinioak)
-- Review: decisions fixed in issue #17 before implementation; the page's response headers and the TLS floor decided during planning; implementation reviewed in the pull request that closes #17, 2026-11-21
+- Review: decisions fixed in issue #17 before implementation; the page's response headers and the TLS floor decided during planning; a `/code-review` of the branch dropped OPTIONS and X-XSS-Protection and fixed the API's redirects and docs behind the proxy; implementation reviewed in the pull request that closes #17, 2026-11-21
 
 ## Context
 
@@ -25,14 +25,21 @@ One CloudFront distribution on the default `*.cloudfront.net` domain, with two o
   distribution's ARN. Managed `CachingOptimized` cache policy.
 - **`/api/*`** → the instance's public DNS name over HTTP on port 80, to nginx, which proxies to
   metrics-api. The managed `UseOriginCacheControlHeaders-QueryStrings` cache policy honours the
-  API's own `max-age`. GET, HEAD and OPTIONS only.
+  API's own `max-age`. GET and HEAD only: the page calls the API from the same origin, so there
+  are no CORS preflights, and OPTIONS requests would never be cached and would all reach the
+  server (#17 had GET, HEAD and OPTIONS).
 - **Origin protection:** the security group allows port 80 from the AWS-managed prefix list
   `com.amazonaws.global.cloudfront.origin-facing` and nothing else inbound.
 - **Viewers:** redirect HTTP to HTTPS, HTTP/2 and HTTP/3, compression, `PriceClass_100`.
 - **Headers:** the managed `SecurityHeadersPolicy` on `/api/*`. The page gets a custom response
   headers policy with the same headers, plus the Content-Security-Policy and
-  `Referrer-Policy: no-referrer` that nginx sends locally. The only difference is
-  `X-Frame-Options: DENY`, which matches `frame-ancestors 'none'`.
+  `Referrer-Policy: no-referrer` that nginx sends locally. It differs from the managed policy
+  in two ways: `X-Frame-Options: DENY`, which matches `frame-ancestors 'none'`, and no
+  `X-XSS-Protection`, which browsers have dropped and nginx doesn't send.
+- **The API behind the prefix:** nginx strips `/api/`, and the origin sees its own host name
+  over HTTP, so the API can't build a correct absolute URL. It therefore makes none:
+  trailing-slash redirects are off (`/v1/now/by-mode/` is a 404), and the self-hosted docs page
+  derives the prefix from its own path in the browser.
 
 ## Alternatives considered
 
@@ -69,6 +76,9 @@ One CloudFront distribution on the default `*.cloudfront.net` domain, with two o
   invalidate.
 - The CSP is now in two places: `deploy/compose/web/nginx.conf` and
   `deploy/terraform/release/cloudfront.tf`. Change them together.
+- The API docs page (`/api/docs`) is served with Swagger UI from the metrics-api image (pinned
+  npm tarball, SHA-256 checked) instead of FastAPI's default CDN page, which the CSP blocks.
+  Its CSP adds only `img-src data:`. ReDoc is dropped.
 - Cost: €0 a month within the always-free allowances. The Free plan account is billed the same
   way; CloudFront's flat-rate plans are a separate opt-in and aren't used.
 - Revisit with a custom domain (certificate, HTTPS to the origin, TLS 1.2 floor), when the API

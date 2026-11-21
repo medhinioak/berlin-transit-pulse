@@ -28,7 +28,8 @@ data "aws_cloudfront_response_headers_policy" "security_headers" {
 
 # The managed SecurityHeadersPolicy has no Content-Security-Policy, and S3 sends none. This
 # policy adds the CSP and Referrer-Policy that nginx sends locally (deploy/compose/web/nginx.conf),
-# with the managed policy's other headers. Keep the CSP in step with nginx.conf.
+# with the managed policy's HSTS, nosniff and frame options. It leaves out X-XSS-Protection:
+# browsers have dropped it, and nginx doesn't send it. Keep the CSP in step with nginx.conf.
 resource "aws_cloudfront_response_headers_policy" "web" {
   name    = "btp-release-web"
   comment = "Security headers and CSP for the static page"
@@ -57,12 +58,6 @@ resource "aws_cloudfront_response_headers_policy" "web" {
     strict_transport_security {
       access_control_max_age_sec = 31536000
       override                   = true
-    }
-
-    xss_protection {
-      protection = true
-      mode_block = true
-      override   = true
     }
   }
 }
@@ -119,12 +114,14 @@ resource "aws_cloudfront_distribution" "main" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.web.id
   }
 
-  # nginx on the instance strips /api/ and proxies to metrics-api.
+  # nginx on the instance strips /api/ and proxies to metrics-api. GET and HEAD only: the page
+  # calls the API from the same origin, so browsers send no CORS preflights, and OPTIONS
+  # requests would never be cached and would all reach the server.
   ordered_cache_behavior {
     path_pattern               = "/api/*"
     target_origin_id           = "api"
     viewer_protocol_policy     = "redirect-to-https"
-    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    allowed_methods            = ["GET", "HEAD"]
     cached_methods             = ["GET", "HEAD"]
     compress                   = true
     cache_policy_id            = data.aws_cloudfront_cache_policy.use_origin_cache_control.id
