@@ -14,6 +14,7 @@ when to write one: [`../process.md`](../process.md#writing-an-adr).
 | [0018](0018-use-eu-north-1-and-an-iam-user-with-aws-login.md) | Use eu-north-1 and an IAM user with `aws login` on the Free plan | Accepted |
 | [0019](0019-pin-the-reference-time-of-live-views-with-a-session-setting.md) | Pin the reference time of live views with a session setting | Accepted |
 | [0020](0020-run-the-release-on-one-t4g-small-with-no-ssh.md) | Run the release on one t4g.small with no SSH | Accepted |
+| [0021](0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md) | Serve the site through CloudFront with an S3 origin and a CloudFront-only EC2 origin | Accepted |
 
 ## Planned
 

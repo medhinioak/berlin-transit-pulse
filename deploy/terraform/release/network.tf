@@ -4,7 +4,7 @@
 resource "aws_vpc" "main" {
   cidr_block = "10.20.0.0/16"
 
-  # Needed for the instance's public DNS name, which #17 uses as the CloudFront origin.
+  # Needed for the instance's public DNS name, the CloudFront origin of /api/* (cloudfront.tf).
   enable_dns_support   = true
   enable_dns_hostnames = true
 
@@ -53,8 +53,9 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# No inbound rules: shell access is through SSM Session Manager, which needs only outbound
-# HTTPS. #17 adds port 80 from the CloudFront origin-facing prefix list, nothing else.
+# The only inbound rule is port 80 from CloudFront's origin-facing prefix list (cloudfront.tf).
+# Shell access is through SSM Session Manager, which needs only outbound HTTPS.
+# The description below is out of date but stays: changing it replaces the security group.
 resource "aws_security_group" "server" {
   name        = "btp-release-server"
   description = "Release server: no inbound, all outbound"
