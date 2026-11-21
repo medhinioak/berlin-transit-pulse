@@ -12,11 +12,11 @@ Tasks: GitHub Issues, one milestone per release (M1–M5, Alternatives, After la
 # Commands
 
 Keep this list true to the Makefile (`make help` lists every target).
-Targets marked (stub) print the issue that implements them and exit non-zero.
 
 - Install: make install (uv sync --all-packages)
 - Start the stack locally: make up (Kafka, Postgres, all services; waits until healthy;
-  replays fixtures when BTP_FEED_MODE=fixtures). Stop / follow logs: make down / make logs
+  offline fixtures replay by default, BTP_FEED_MODE=live for the real feed).
+  Stop / follow logs: make down / make logs
 - Inspect the stack: make ps, make kafka-topics, make psql (details: deploy/compose/README.md)
 - Run ingest on its own: BTP_FEED_MODE=fixtures uv run btp-ingest (offline replay; live mode needs
   BTP_FEED_CONTACT and calls the real feed, see Rules). Config: services/ingest/README.md
@@ -28,6 +28,9 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Tests: make test (unit, with coverage; one test:
   uv run pytest services/ingest/tests/test_smoke.py::test_package_imports)
 - Integration tests: make test-integration (needs make up)
+- End-to-end smoke test: scripts/smoke.sh [CMD …] (own compose project btp-smoke; runs CMD while
+  the stack is up, then down -v; stop make up first, same ports).
+  CI runs scripts/smoke.sh make test-integration
 - Lint and format: make lint / make fmt (ruff); type check: make typecheck (mypy strict, per package)
 - Pre-commit hooks: uv run pre-commit run --all-files
 - Record new feed fixtures: make fixtures LABEL=rush-hour|evening (calls the live feed, needs
@@ -132,5 +135,11 @@ Targets marked (stub) print the issue that implements them and exit non-zero.
 - Consumers read the schedule only through the schedule.v_* views (active version, ADR-0009);
   the tables hold every version and trip_ids change between them. A Berlin trip has any stop
   with a de:11000: stop_id (ADR-0017).
+- Realtime stop_ids are sometimes bare numbers that aren't in the static GTFS (~1.3% of
+  updates): match realtime to static by stop_sequence within the trip, never by stop_id.
+- macOS: keep the clone outside iCloud-synced folders (~/Documents, ~/Desktop); iCloud hides
+  the editable .pth files and workspace packages stop importing. An image build stalled at
+  "load metadata" is usually a Docker Keychain prompt waiting for an answer
+  (docs/troubleshooting.md).
 - The release server is a t4g.small (arm64, 2 GB RAM): build arm64 images, keep Kafka's
   heap at about 384–512 MB, and check memory after adding anything to compose.

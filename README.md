@@ -8,10 +8,11 @@ BVG publishes per-line punctuality once a year. This project turns the live feed
 continuously updated picture: on-time rate, delays, cancellations and headway regularity per
 line, stop and hour, for buses, trams, the U-Bahn, the S-Bahn and regional trains in Berlin.
 
-**Status (2026-11-20).** Milestone M1, a local walking skeleton, is nearly done: the pipeline runs
-end to end on a developer machine and serves a read-only API. Nothing is deployed to AWS yet and
-there is no public site. The first public release, v1.0, is targeted for 2027-01-17. Current
-status: [`docs/plan.md`](docs/plan.md).
+**Status: v0.1, local walking skeleton (2026-11-21).** The pipeline runs end to end on a
+developer machine, from recorded feed snapshots to a read-only API and one page showing the
+current delay by mode. It is a live indicator, not yet a punctuality rate. Nothing is deployed
+to AWS yet and there is no public site. The first public release, v1.0, is targeted for
+2027-01-17. Current status: [`docs/plan.md`](docs/plan.md).
 
 ## What it answers
 
@@ -25,18 +26,20 @@ numbers with a documented method. Scope and non-goals: [`docs/spec.md`](docs/spe
 ## How it works
 
 ```text
-VBB GTFS-RT feed, polled every 30 s
+VBB GTFS-RT feed, polled every 30 s (or recorded snapshots)
   └─► ingest (diffs snapshots, publishes changed trips)
         └─► Kafka topic trip-updates
               └─► stop-event-processor ─► Postgres, schema events
-                                              └─► metrics-jobs ─► Postgres, schema marts (+ Parquet in S3)
-                                                                      └─► metrics-api ─► CloudFront ─► browser
+                                              └─► metrics-jobs ─► Postgres, schema marts (views)
+                                                                      └─► metrics-api ─► web page
 VBB static GTFS ─► schedule ─► Postgres, schema schedule ─► read by metrics-jobs and the API views
 ```
 
 Five Python services, each in its own container with its own database role, talk through one
-Kafka topic and a read-only API. The release runs on one small AWS server with Terraform, within
-a budget of €20 per month. Full design, trade-offs and what is built versus planned:
+Kafka topic and a read-only API. In v0.1 all of it runs in Docker Compose on a laptop; marts are
+SQL views over the live state. Planned, not built yet: the AWS release server with Terraform
+within €20 per month and CloudFront in front (M2), finalised stop events and reliability metrics
+(M3), and Parquet history in S3 (M4). Full design, trade-offs and what is built versus planned:
 [`docs/architecture.md`](docs/architecture.md).
 
 | Area | Choice |
@@ -54,20 +57,24 @@ You need Docker with Compose v2, [uv](https://docs.astral.sh/uv/getting-started/
 (for example `brew install uv`; it provides Python 3.12) and `make`.
 
 ```sh
-make install                       # every service and the dev tools into .venv
-BTP_FEED_MODE=fixtures make up     # Kafka, Postgres and all services, offline: replays recorded snapshots
-curl http://localhost:8000/v1/now/by-mode   # live indicator per mode; OpenAPI docs at /docs
-make down                          # stop, keep data
+make install    # every service and the dev tools into .venv
+make up         # Kafka, Postgres and all services, offline: replays recorded snapshots
+open http://localhost:8080   # the live page (or visit it in a browser)
 ```
 
+The API is at http://localhost:8000 (`/v1/now/by-mode`, OpenAPI docs at `/docs`). `make down`
+stops the stack and keeps its data. The first `make up` builds the images, so it takes a few
+minutes; values appear a few seconds after it returns.
+
 The recorded snapshots are from 2026-11-18, so in fixtures mode the API pins "now" to that
-rush hour. No network access and no API key are needed. Live mode calls the real VBB feed, needs
-`BTP_FEED_CONTACT` and must follow the
+rush hour. No network access and no API key are needed. `BTP_FEED_MODE=live make up` calls the
+real VBB feed, needs `BTP_FEED_CONTACT` and must follow the
 [rules for using the feed](docs/data-sources.md#rules-for-using-the-feed).
 
 ```sh
 make test                # unit tests with coverage
 make test-integration    # needs `make up`
+scripts/smoke.sh         # end to end in its own compose project (stop `make up` first; CI runs this)
 make lint                # ruff
 make typecheck           # mypy, strict, per package
 make help                # every target
@@ -85,7 +92,7 @@ keep the clone outside iCloud-synced folders such as `~/Documents`
 | `libs/common/` | Shared settings, logging and fixture loading |
 | `schemas/` | Kafka message contracts |
 | `fixtures/` | Recorded feed snapshots and a small static GTFS used by all tests |
-| `deploy/` | Docker Compose stack and, from M2, Terraform |
+| `deploy/` | Docker Compose stack; Terraform (state bucket now, release stack from M2) |
 | `web/` | Commuter UI (minimal live page, http://localhost:8080 after `make up`) |
 | `docs/` | Documentation |
 
