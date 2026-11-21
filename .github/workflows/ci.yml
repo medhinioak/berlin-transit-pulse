@@ -1,6 +1,6 @@
-# Lint, type check, unit tests, image builds and the end-to-end smoke test. Each job calls the
-# Makefile target (or scripts/smoke.sh), so CI and local runs stay identical. No secrets, and
-# no calls to the VBB feed: tests use fixtures/.
+# Lint, type check, unit tests, Terraform validate, image builds and the end-to-end smoke test.
+# Each job calls the Makefile target (or scripts/smoke.sh), so CI and local runs stay identical.
+# No secrets, and no calls to the VBB feed: tests use fixtures/.
 name: CI
 
 on:
@@ -66,6 +66,22 @@ jobs:
           name: coverage
           path: coverage.xml
           if-no-files-found: warn
+
+  # Terraform fmt and validate for every stack, without a backend or AWS credentials.
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [bootstrap, release]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.17.2"
+          terraform_wrapper: false
+      - run: make tf-validate STACK=${{ matrix.stack }}
 
   # Every service with a Dockerfile is built; a new service is picked up without editing CI.
   discover:

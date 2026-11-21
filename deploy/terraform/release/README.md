@@ -65,10 +65,13 @@ If cloud-init failed, the reason is in `/var/log/cloud-init-output.log`.
 
 Postgres and Kafka data live on the root volume, which is deleted with the instance. Until
 backups exist (#28, M3), replacing the instance loses all collected data. So
-`lifecycle { ignore_changes = [ami, user_data] }` stops a new Amazon Linux AMI or an edited
-cloud-init script from forcing a replacement. If a plan still says
-`aws_instance.server must be replaced`, stop and find out why. A deliberate rebuild is
-`terraform apply -replace=aws_instance.server`, after a backup.
+`lifecycle { ignore_changes = [ami, user_data] }` stops a new Amazon Linux AMI from forcing a
+replacement, and `disable_api_termination` stops termination from the console or the API. If a
+plan still says `aws_instance.server must be replaced`, stop and find out why: other attributes
+(the availability zone, the subnet) still force one. A deliberate rebuild, after a backup: set
+`disable_api_termination = false` in a reviewed change and apply it, then
+`terraform apply -replace=aws_instance.server`.
 
-Changes to the cloud-init script only reach a new instance. On the running one, apply them by
-hand through SSM (or through the deploy in #18).
+Changes to the cloud-init script (a new Compose version, say) show no diff in the plan and only
+reach a new instance. On the running one, apply them by hand through SSM (or through the deploy
+in #18).

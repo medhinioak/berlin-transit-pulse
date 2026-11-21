@@ -22,6 +22,10 @@ resource "aws_instance" "server" {
 
   # No key pair and no port 22: shell access is through SSM Session Manager only.
 
+  # The root volume holds all collected data: refuse termination from the console or API.
+  # A deliberate rebuild sets this to false in a reviewed change first.
+  disable_api_termination = true
+
   # Throttle to the baseline when credits run out instead of paying for surplus credits.
   credit_specification {
     cpu_credits = "standard"
@@ -55,11 +59,17 @@ resource "aws_instance" "server" {
   }
 
   # Replacing the instance deletes its root volume, and with it all Postgres and Kafka data,
-  # until backups exist (#28, M3). A new AMI or a changed cloud-init script must not do that
-  # by accident: rebuild on purpose with `terraform apply -replace=aws_instance.server`.
+  # until backups exist (#28, M3). A newer AMI from the SSM parameter would force exactly that.
+  # A changed cloud-init script would only stop and start the instance, and cloud-init does not
+  # run it again anyway, so the change is ignored too: apply it on the running server through
+  # SSM. Rebuild on purpose with `terraform apply -replace=aws_instance.server`.
   lifecycle {
     ignore_changes = [ami, user_data]
   }
+
+  # The instance has no public address until the Elastic IP is attached, and cloud-init waits
+  # for the network (templates/cloud-init.sh.tftpl); the route must exist by then.
+  depends_on = [aws_route.public_internet, aws_route_table_association.public]
 }
 
 # Stable public address: the CloudFront origin (#17) and the source address VBB sees.

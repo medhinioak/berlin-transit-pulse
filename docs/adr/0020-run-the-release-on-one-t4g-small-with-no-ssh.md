@@ -28,9 +28,10 @@ Run the release on one EC2 t4g.small (arm64, Amazon Linux 2023) in a public subn
   with short-lived IAM credentials.
 - **AWS's default reverse DNS name** (`ec2-<ip>.eu-north-1.compute.amazonaws.com`) on the
   Elastic IP.
-- **Data on the root volume, protected from accidental replacement.** One 30 GB encrypted gp3
-  root volume; Terraform ignores changes to the AMI and the cloud-init script, so neither forces
-  a new instance.
+- **Data on the root volume, guarded against accidental loss.** One 30 GB encrypted gp3 root
+  volume; Terraform ignores changes to the AMI and the cloud-init script, so a new AMI does not
+  force a new instance, and API termination protection is on. Changing the subnet or the
+  availability zone still forces a replacement: the plan has to be read.
 - **1 GB swap with `vm.swappiness=10`**, as a margin against out-of-memory kills, not as working
   memory.
 
@@ -60,11 +61,19 @@ Run the release on one EC2 t4g.small (arm64, Amazon Linux 2023) in a public subn
 - Nothing listens on a public port in this stack. Getting a shell needs `aws login` and the
   Session Manager plugin; there is no break-glass SSH path, so a broken SSM agent means
   rebuilding the instance.
+- The instance has no public address until the Elastic IP is attached just after launch, so
+  cloud-init waits for internet access before it installs anything.
 - Any container on the host can use the instance role, so the role must stay narrow: today SSM
-  and read access to `/btp/release/*` only.
+  and read access to `/btp/release/*` only. That still includes every Postgres password, the
+  superuser's too: a compromised container (metrics-api is reachable from the internet once
+  #17 is live) could read them and step outside its own schema and role. Accepted for now
+  because nothing runs on the server yet. #18 decides how secrets reach the services (for
+  example, the host-side deploy reads them and hands each service only its own) and narrows
+  the role or the parameter paths to match, before the services are deployed.
 - Replacing the instance loses all Postgres and Kafka data until backups exist (#28). A new AMI
   or a cloud-init change does not reach the running instance by itself: updates are applied
-  through SSM, and a rebuild is a deliberate `terraform apply -replace=aws_instance.server`.
+  through SSM, and a rebuild is deliberate: switch off termination protection in a reviewed
+  change, then `terraform apply -replace=aws_instance.server`.
 - Mail servers and some services treat generic `compute.amazonaws.com` names as low reputation.
   The server sends no mail, so this only matters if a domain is added later.
 - Worth revisiting when #20 shows the instance is throttled or short of memory, when backups

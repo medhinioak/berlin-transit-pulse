@@ -4,6 +4,19 @@
 # Idempotent: running it again changes nothing. Output: /var/log/cloud-init-output.log
 set -euxo pipefail
 
+# The subnet assigns no public address: the instance gets one when Terraform attaches the
+# Elastic IP, shortly after boot. Wait for the internet (up to 10 minutes) before installing.
+for attempt in $(seq 1 120); do
+  if curl -fsS --max-time 5 -o /dev/null https://github.com; then
+    break
+  fi
+  if [ "$attempt" -eq 120 ]; then
+    echo "no internet access after 10 minutes" >&2
+    exit 1
+  fi
+  sleep 5
+done
+
 # Docker and git from the Amazon Linux repositories.
 dnf install -y docker git
 
@@ -25,7 +38,7 @@ plugin_dir=/usr/local/lib/docker/cli-plugins
 install -d -m 0755 "$plugin_dir"
 if ! echo "${compose_sha256}  $plugin_dir/docker-compose" | sha256sum -c --quiet 2>/dev/null; then
   tmp=$(mktemp)
-  curl -fsSL --retry 5 -o "$tmp" \
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$tmp" \
     "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-aarch64"
   echo "${compose_sha256}  $tmp" | sha256sum -c
   install -m 0755 "$tmp" "$plugin_dir/docker-compose"
