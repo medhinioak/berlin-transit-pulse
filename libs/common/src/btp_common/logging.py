@@ -7,12 +7,16 @@ from datetime import UTC, datetime
 
 from btp_common.config import BaseServiceSettings
 
+# The keys JsonFormatter sets itself; structured fields with these names are dropped.
+RESERVED_KEYS = frozenset({"ts", "level", "service", "logger", "message", "exc_info"})
+
 
 class JsonFormatter(logging.Formatter):
     """Format log records as single-line JSON with a UTC timestamp and the service name.
 
-    Structured fields passed as ``extra={"fields": {...}}`` are added to the object; they
-    never replace the standard keys (ts, level, service, logger, message, exc_info).
+    Structured fields passed as ``extra={"fields": {...}}`` are added to the object. A field
+    named like a standard key (RESERVED_KEYS: ts, level, service, logger, message, exc_info)
+    is dropped silently, whether or not the record carries an exception.
     """
 
     def __init__(self, service_name: str) -> None:
@@ -31,7 +35,9 @@ class JsonFormatter(logging.Formatter):
         }
         fields = getattr(record, "fields", None)
         if isinstance(fields, dict):
-            entry.update({str(k): v for k, v in fields.items() if k not in entry})
+            entry.update(
+                {key: v for k, v in fields.items() if (key := str(k)) not in RESERVED_KEYS}
+            )
         if record.exc_info:
             entry["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(entry, ensure_ascii=False, default=str)
