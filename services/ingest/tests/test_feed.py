@@ -141,6 +141,9 @@ def test_sends_gzip_contact_and_etag_after_first_response(
     assert snapshot.etag == '"v1"'
     assert snapshot.raw_bytes_len == len(feed_bytes)
     assert 0 < snapshot.wire_bytes < len(feed_bytes)
+    # The gzipped body is kept unchanged for the raw archive.
+    assert snapshot.wire_gzip
+    assert gzip.decompress(snapshot.wire) == feed_bytes
     assert snapshot.feed_timestamp == datetime.fromtimestamp(FEED_TS, tz=UTC)
     assert snapshot.fetched_at == clock.wall()
     assert len(snapshot.message.entity) > 100
@@ -228,6 +231,8 @@ def test_uncompressed_body_is_accepted(clock: FakeClock, feed_bytes: bytes) -> N
     snapshot = Server(clock, (200, feed_bytes, {})).client().fetch()
     assert snapshot is not None
     assert snapshot.wire_bytes == snapshot.raw_bytes_len == len(feed_bytes)
+    assert snapshot.wire == feed_bytes
+    assert not snapshot.wire_gzip
 
 
 def test_version_1_0_is_accepted(clock: FakeClock) -> None:

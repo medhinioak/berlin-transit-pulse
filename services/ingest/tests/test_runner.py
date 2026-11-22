@@ -14,7 +14,8 @@ from btp_common.logging import JsonFormatter
 from btp_ingest import runner
 from btp_ingest.feed import FeedUnavailable, InvalidSnapshot, Snapshot
 from btp_ingest.publish import ProducerFatalError
-from btp_ingest.runner import StopSignal, main, run
+from btp_ingest.raw import ArchiveResult, RawArchiver
+from btp_ingest.runner import StopSignal, build_archiver, main, run
 from btp_ingest.settings import IngestSettings
 
 START = datetime(2026, 11, 18, 17, 3, 41, tzinfo=UTC)
@@ -219,11 +220,16 @@ def test_main_runs_fixtures_and_stops_on_sigterm(monkeypatch: pytest.MonkeyPatch
     calls = []
 
     def fake_run(
-        source: runner.Source, handler: runner.Handler, interval_s: float, stop: StopSignal
+        source: runner.Source,
+        handler: runner.Handler,
+        interval_s: float,
+        stop: StopSignal,
+        archive: runner.Archive | None = None,
     ) -> None:
         """Fetch once, then deliver SIGTERM as a container stop would."""
         snap = source.fetch()
         assert snap is not None
+        assert archive is None  # fixtures mode never archives
         handler(snap)
         signal.raise_signal(signal.SIGTERM)
         calls.append((interval_s, stop.is_set()))
@@ -262,7 +268,7 @@ def test_main_live_waits_one_interval_before_the_first_request(
         waits.append(timeout)
         return True
 
-    def fail_run(*_args: object) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> None:
         """run() must not be reached."""
         raise AssertionError("polled before the startup wait ended")
 
@@ -277,10 +283,58 @@ def test_main_exits_1_on_a_fatal_producer_error(monkeypatch: pytest.MonkeyPatch)
     """A fatal producer error ends the service with 1, so the container restarts."""
     monkeypatch.setenv("BTP_FEED_MODE", "fixtures")
 
-    def fatal_run(*_args: object) -> None:
+    def fatal_run(*_args: object, **_kwargs: object) -> None:
         """Fail as Publisher.handle does after a fatal error."""
         raise ProducerFatalError("fenced")
 
     monkeypatch.setattr(runner, "run", fatal_run)
     monkeypatch.setattr(runner, "make_producer", lambda *_: QuietProducer())
     assert main() == 1
+
+
+def test_archive_result_is_in_the_poll_line(caplog: pytest.LogCaptureFixture) -> None:
+    """Each 200 is offered to the archiver before the poll line; 304s are not."""
+    caplog.set_level(logging.INFO)
+    loop = FakeLoop(3)
+    offered: list[Snapshot] = []
+    results: list[ArchiveResult] = ["queued", "not_due"]
+
+    def archive(snap: Snapshot) -> ArchiveResult:
+        """Record the snapshot and answer in order."""
+        offered.append(snap)
+        return results.pop(0)
+
+    snap = snapshot()
+    source = ScriptedSource(loop, snap, None, snap)
+    run(source, lambda _s: None, 30.0, loop, clock=loop.now, archive=archive)
+    assert offered == [snap, snap]
+    assert [line.get("raw") for line in poll_lines(caplog)] == ["queued", None, "not_due"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "bucket", "on"),
+    [("live", "btp-data-x", True), ("live", None, False), ("fixtures", "btp-data-x", False)],
+)
+def test_archiver_only_in_live_mode_with_a_bucket(
+    monkeypatch: pytest.MonkeyPatch, mode: str, bucket: str | None, on: bool
+) -> None:
+    """Fixtures mode and an unset BTP_RAW_BUCKET never build an S3 client."""
+    monkeypatch.setenv("BTP_FEED_MODE", mode)
+    if bucket:
+        monkeypatch.setenv("BTP_RAW_BUCKET", bucket)
+    else:
+        monkeypatch.delenv("BTP_RAW_BUCKET", raising=False)
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-north-1")
+    archiver = build_archiver(IngestSettings())
+    assert (archiver is not None) is on
+    if archiver is not None:
+        assert isinstance(archiver, RawArchiver)
+        assert archiver.prefix == "raw/vbb-rt/"
+        assert archiver.interval_s == 300.0
+        archiver.close()
+
+
+def test_raw_interval_below_60_s_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """BTP_RAW_INTERVAL_S below 60 is refused at startup."""
+    monkeypatch.setenv("BTP_RAW_INTERVAL_S", "30")
+    assert main() == 2

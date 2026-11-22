@@ -35,3 +35,13 @@ resource "aws_ssm_parameter" "feed_contact" {
   tier        = "Standard"
   value       = var.feed_contact
 }
+
+# Data bucket for the raw snapshot archive (#19). A parameter, so the bucket name with the
+# account ID stays out of the repo; deploy.sh renders it as BTP_RAW_BUCKET.
+resource "aws_ssm_parameter" "data_bucket" {
+  name        = "${local.ssm_prefix}/data_bucket"
+  description = "Data bucket for raw snapshots (ingest BTP_RAW_BUCKET)"
+  type        = "String"
+  tier        = "Standard"
+  value       = aws_s3_bucket.data.bucket
+}

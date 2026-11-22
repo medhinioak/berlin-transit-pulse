@@ -47,6 +47,7 @@ declare -A ENV_NAMES=(
   [pg/metrics_jobs]=BTP_PG_METRICS_JOBS_PASSWORD
   [pg/api]=BTP_PG_API_PASSWORD
   [feed_contact]=BTP_FEED_CONTACT
+  [data_bucket]=BTP_RAW_BUCKET
 )
 
 log "rendering $ENV_FILE from $SSM_PREFIX"

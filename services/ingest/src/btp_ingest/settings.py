@@ -8,6 +8,7 @@ from btp_common.config import BaseServiceSettings
 
 VBB_RT_URL = "https://production.gtfsrt.vbb.de/data"
 MIN_POLL_INTERVAL_S = 10.0
+MIN_RAW_INTERVAL_S = 60.0
 
 
 class IngestSettings(BaseServiceSettings):
@@ -29,3 +30,8 @@ class IngestSettings(BaseServiceSettings):
     kafka_topic: str = "trip-updates"
     # A message not delivered within this fails; the next poll retries the snapshot.
     publish_timeout_s: float = Field(default=10.0, gt=0)
+    # Raw snapshot archive (btp_ingest.raw, ADR-0008). Unset bucket means off; live mode only.
+    raw_bucket: str | None = None
+    raw_prefix: str = "raw/vbb-rt/"
+    # Measured on the feed header timestamp since the last successful upload.
+    raw_interval_s: float = Field(default=300.0, ge=MIN_RAW_INTERVAL_S)

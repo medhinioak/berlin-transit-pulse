@@ -18,7 +18,7 @@ for Stockholm yet; they are small and are checked in the M5 cost review (#42).
 | EC2 t4g.small | $0.0172 per hour × 730 h, standard CPU credits ([ADR-0020](adr/0020-run-the-release-on-one-t4g-small-with-no-ssh.md)) | 12.56 |
 | Public IPv4 (Elastic IP) | $0.005 per hour × 730 h | 3.65 |
 | EBS gp3 disk | 30 GB × $0.0836 per GB-month (Kafka 24 h retention, Postgres 30 days, swap); baseline IOPS and throughput are included | 2.51 |
-| S3 raw snapshots | 1 snapshot every 5 min × 2.3 MB, deleted after 14 days (about 9 GB stored) | ~0.25 |
+| S3 raw snapshots | 1 snapshot every 5 min × 2.3 MB, deleted after 14 days (about 9 GB stored, about 8,600 PUTs a month; [ADR-0008](adr/0008-keep-a-raw-snapshot-every-5-minutes-for-14-days.md)) | ~0.25 |
 | S3 Parquet history and backups | Grows about 1–3 GB per month | ~0.10 |
 | CloudFront, CloudWatch (10 custom metrics), SNS email | Within the always-free allowances (CloudFront: 1 TB out and 10 million requests a month; origin fetches from S3 and EC2 are free) | 0.00 |
 | Route 53 hosted zone (optional, plus about €10–15 per year for a domain) | 1 zone | 0.50 |
