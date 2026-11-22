@@ -15,8 +15,8 @@ BTP_FEED_MODE=fixtures uv run btp-ingest                         # offline repla
 BTP_FEED_MODE=live BTP_FEED_CONTACT=<email or URL> uv run btp-ingest   # the real feed
 ```
 
-The service stops on SIGTERM or SIGINT. It finishes the current poll, flushes Kafka, closes the
-connection and exits with 0. In live mode it waits one poll interval before the first request,
+The service stops on SIGTERM or SIGINT. It finishes the current poll, flushes Kafka, waits up
+to 10 s for a running raw snapshot upload, closes the connection and exits with 0. In live mode it waits one poll interval before the first request,
 so a crash-restart loop can't exceed VBB's rate limit (the rate guard lives in one process).
 It exits with 2 if the settings are invalid, if live mode has no contact, or if the fixture
 set doesn't exist, and with 1 after a fatal Kafka producer error (the idempotent producer
@@ -34,6 +34,10 @@ can't be used again, so the container restarts with a new one).
 | `BTP_KAFKA_BOOTSTRAP` | `127.0.0.1:9094` | broker; compose sets `kafka:9092` |
 | `BTP_KAFKA_TOPIC` | `trip-updates` | topic to publish to |
 | `BTP_PUBLISH_TIMEOUT_S` | `10` | a message not delivered within this fails (the producer's `message.timeout.ms`); the flush waits 5 s longer, so nothing carries over to the next snapshot |
+| `BTP_RAW_BUCKET` | none | S3 bucket for the raw snapshot archive; unset means off. Used in live mode only |
+| `BTP_RAW_PREFIX` | `raw/vbb-rt/` | key prefix in the bucket |
+| `BTP_RAW_INTERVAL_S` | `300` | slot length in feed header seconds; the first snapshot of each slot is archived. Below 60 is refused |
+| `BTP_AWS_REGION` | `eu-north-1` | region of the bucket, passed to boto3 (botocore ignores `AWS_REGION`) |
 | `BTP_LOG_LEVEL` | `INFO` | log level |
 
 ## Politeness (live mode)
@@ -77,6 +81,42 @@ Every poll writes one JSON line with the message `poll`. For example, from fixtu
 `status` is always a string: the HTTP code (`"200"`, `"304"`, `"429"`, `"503"`), `"network"`
 or `"invalid"`. Failures are logged at WARNING level and add `next_poll_s`, `retry_after_s` and,
 where there is one, a `reason`.
+
+With the raw archive on, a 200 adds `raw`: `queued`, `skipped_busy` or `not_due` (see below).
+
+## Raw snapshot archive
+
+In live mode with `BTP_RAW_BUCKET` set, `raw.py` uploads one snapshot that was already fetched
+(no extra request to VBB): the first snapshot of each `BTP_RAW_INTERVAL_S` slot of feed header
+time. Slots are aligned to the epoch, so with 300 s they start at :00, :05, … UTC and a day has
+288 objects, whatever the poll timing. A failed upload leaves its slot open, so the next
+snapshot in the slot tries again. Decision and sizes:
+[ADR-0008](../../docs/adr/0008-keep-a-raw-snapshot-every-5-minutes-for-14-days.md).
+
+- Key: `raw/vbb-rt/date=YYYY-MM-DD/hour=HH/YYYYMMDDTHHMMSSZ.pb.gz`, UTC from the header
+  timestamp. A restart that uploads the same snapshot again overwrites the same key.
+- Body: the gzip body as received, unchanged (gzipped at level 6 if VBB sent it plain);
+  `Content-Type: application/x-protobuf`, `Content-Encoding: gzip`, metadata `feed-ts`,
+  `etag`, `entity-count`. Some HTTP clients (curl `--compressed`, browsers) unpack such objects
+  on download, so a file saved that way holds plain protobuf; boto3 and the AWS CLI keep the
+  gzip bytes.
+- One background thread with a queue of one, so polling is never delayed (it also does the
+  compression of a plain body). A due snapshot
+  that arrives while an upload runs is skipped (`raw_skipped_busy`). A failure is logged and
+  counted (`raw_failed`) after boto3's standard retries; the next poll tries again.
+- Credentials come from the default boto3 chain: the instance role through IMDSv2 on the
+  server. The region comes from `BTP_AWS_REGION` and the release takes the bucket from SSM
+  `/btp/release/data_bucket`. Fixtures mode and runs without the bucket never create an S3
+  client; tests use a fake uploader and botocore's `Stubber`.
+
+Each upload writes one line from the worker thread (WARNING with `error` on failure; values
+illustrative):
+
+```json
+{"level": "INFO", "service": "ingest", "logger": "btp_ingest.raw", "message": "raw upload",
+ "raw_key": "raw/vbb-rt/date=2026-11-22/hour=17/20261122T170341Z.pb.gz", "raw_bytes": 2412345,
+ "duration_ms": 640, "ok": true, "raw_failed": 0, "raw_skipped_busy": 0}
+```
 
 ## Publishing changes
 

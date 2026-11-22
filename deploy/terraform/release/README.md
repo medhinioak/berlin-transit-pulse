@@ -21,7 +21,7 @@ Conventions for all stacks: [`../README.md`](../README.md).
 | `s3.tf` | Data bucket `btp-data-<account-id>-eu-north-1` with lifecycle rules, web bucket `btp-web-<account-id>-eu-north-1` with a rule aborting incomplete uploads; each with public access block, `BucketOwnerEnforced`, SSE-S3 and a TLS-only bucket policy; the web bucket's policy also lets the distribution read objects |
 | `cloudfront.tf` | Distribution with an S3 origin (Origin Access Control) and the instance as `/api/*` origin, a response headers policy for the page, and the security group rule for port 80 from CloudFront's origin-facing prefix list |
 | `github_oidc.tf` | GitHub Actions OIDC provider; role `btp-release-deploy`, trusted only for workflow runs on `main`, that can send `AWS-RunShellScript` commands to the release instance, read their results, write the web bucket and invalidate the distribution |
-| `secrets.tf` | Five generated Postgres passwords as SecureString parameters `/btp/release/pg/{superuser,processor,schedule,metrics_jobs,api}`; the feed contact as `/btp/release/feed_contact` |
+| `secrets.tf` | Five generated Postgres passwords as SecureString parameters `/btp/release/pg/{superuser,processor,schedule,metrics_jobs,api}`; the feed contact as `/btp/release/feed_contact`; the data bucket name as `/btp/release/data_bucket` (ingest's `BTP_RAW_BUCKET`) |
 
 No NAT gateway, no load balancer, no VPC endpoints. Cost: about $18.72 (€17.00) a month for
 the server, plus about $0.35 (€0.32) for S3 once raw snapshots are uploaded (#19), about

@@ -52,6 +52,9 @@ class Snapshot:
     raw_bytes_len: int  # decompressed protobuf size
     wire_bytes: int  # bytes received, as sent (gzipped)
     message: FeedMessage
+    # The body as received, kept for the raw archive (btp_ingest.raw); empty for fixtures.
+    wire: bytes = b""
+    wire_gzip: bool = False  # True when wire is gzip (Content-Encoding: gzip)
 
 
 class FeedUnavailable(Exception):
@@ -223,7 +226,8 @@ class FeedClient:
         if status != 200:
             retry = retry_after_s(response_headers.get("retry-after"), fetched_at)
             raise FeedUnavailable(str(status), retry)
-        data = _decode(wire, response_headers.get("content-encoding", ""))
+        content_encoding = response_headers.get("content-encoding", "")
+        data = _decode(wire, content_encoding)
         message = parse(data)
         feed_timestamp = validate(message, fetched_at, self.max_age_s)
         # Only a valid snapshot moves the ETag, so a bad body is fetched again next time.
@@ -235,6 +239,8 @@ class FeedClient:
             raw_bytes_len=len(data),
             wire_bytes=len(wire),
             message=message,
+            wire=wire,
+            wire_gzip=_is_gzip(content_encoding),
         )
 
     def close(self) -> None:
@@ -279,12 +285,17 @@ class FixtureSource:
 
 def _decode(wire: bytes, content_encoding: str) -> bytes:
     """Undo gzip content encoding; a corrupt gzip body is an invalid snapshot."""
-    if content_encoding.strip().lower() != "gzip":
+    if not _is_gzip(content_encoding):
         return wire
     try:
         return gzip.decompress(wire)
     except (OSError, EOFError) as exc:
         raise InvalidSnapshot(f"corrupt gzip body: {exc}") from exc
+
+
+def _is_gzip(content_encoding: str) -> bool:
+    """Return True for a gzip Content-Encoding header value."""
+    return content_encoding.strip().lower() == "gzip"
 
 
 def _manifest_etags(path: Path) -> dict[str, str]:

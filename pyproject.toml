@@ -12,6 +12,7 @@ dev = [
     "psycopg[binary]>=3.3.9",
     "httpx>=0.28.1",
     "types-protobuf>=7.35.1.20260906",
+    "types-boto3[s3]>=1.44.9",
 ]
 
 [tool.ruff]

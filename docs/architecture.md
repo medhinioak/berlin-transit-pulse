@@ -64,7 +64,7 @@ proof of concept differ only in their Terraform.
 
 | Service | Owns | Reads from → writes to | Status |
 | --- | --- | --- | --- |
-| [`ingest`](../services/ingest/README.md) | Polling, diffing, raw snapshots | VBB feed → Kafka `trip-updates`; S3 | **Built** (#6, #7): poll, validate, diff, publish. Raw snapshots to S3: planned M2 (#19) |
+| [`ingest`](../services/ingest/README.md) | Polling, diffing, raw snapshots | VBB feed → Kafka `trip-updates`; S3 | **Built** (#6, #7, #19): poll, validate, diff, publish; raw snapshot to S3 every 5 min |
 | [`stop-event-processor`](../services/stop-event-processor/README.md) | Turning predictions into finalised stop events | Kafka → Postgres `events` | **Skeleton built** (#8): latest prediction per trip and stop, idempotent. Finalisation with a grace window: planned M3 (#22, #23) |
 | [`schedule`](../services/schedule/README.md) | Static GTFS import, versions, Berlin and mode flags | VBB static zip → Postgres `schedule` | **Built** (#5): versioned import with atomic swap. Weekly refresh and pruning: planned M3 (#24) |
 | [`metrics-jobs`](../services/metrics-jobs/README.md) | Metric models, data-quality checks, Parquet export | Postgres `events`, `schedule` → Postgres `marts`; S3 | **Started** (#9): two plain SQL views. Data quality M3 (#25), metrics M3 (#29), dbt M4 (#32), Parquet M4 (#34) |
@@ -80,7 +80,7 @@ ADR is planned, the row says which; accepted ADRs are linked.
 
 | Layer | Choice | Rejected alternatives | Trade-off |
 | --- | --- | --- | --- |
-| **Ingestion** | Python poller (`httpx`) every 30 s with gzip, ETag and a User-Agent with contact details. Diffs each snapshot against the previous one and publishes only changed trips. Raw snapshot to S3 every 5 minutes. *Planned ADR-0003, ADR-0008* | Publishing every stop update (about 206,000 per poll); a Lambda poller | Diffing cuts Kafka traffic to a few thousand messages per poll. One process is one point of failure; the container restart policy restarts it, and a restart republishes every trip as `new` |
+| **Ingestion** | Python poller (`httpx`) every 30 s with gzip, ETag and a User-Agent with contact details. Diffs each snapshot against the previous one and publishes only changed trips. Raw snapshot to S3 every 5 minutes, in a background thread ([ADR-0008](adr/0008-keep-a-raw-snapshot-every-5-minutes-for-14-days.md)). *Planned ADR-0003* | Publishing every stop update (about 206,000 per poll); a Lambda poller | Diffing cuts Kafka traffic to a few thousand messages per poll. One process is one point of failure; the container restart policy restarts it, and a restart republishes every trip as `new` |
 | **Streaming** | Apache Kafka in KRaft mode (no ZooKeeper), single broker, heap about 384–512 MB. Topic `trip-updates` keyed by trip ID and service date, 6 partitions, 24 h retention ([contract](../schemas/trip-updates.md)). *Planned ADR-0002* | MSK (about $67+ per month); Redpanda (memory-hungry); NATS JetStream; Redis Streams | A widely used log: consumers can be replayed and added independently. No replication; a production version would need it |
 | **Stream processing** | Python consumer (`confluent-kafka`) that turns predictions into observed stop events: keeps the latest prediction per (trip, stop) and finalises it once the stop time plus a grace window has passed. Idempotent upserts. *Planned ADR-0004* | Flink, Spark Structured Streaming, Faust, Bytewax | Plain Python is easy to test with recorded feeds. No exactly-once guarantee, so correctness comes from idempotent keys |
 | **Static schedule** | Import of VBB's static GTFS into a versioned Postgres schema, swapped atomically; weekly refresh. [ADR-0009](adr/0009-version-static-gtfs-and-swap-atomically.md), [ADR-0017](adr/0017-define-berlin-and-mode-from-stop-ids-and-route-types.md) | Querying the zip on the fly; truncate and reload | Needs a tested refresh path before the 2026-12-13 timetable change. About 1 GB of Postgres per kept version |
@@ -128,7 +128,7 @@ uploads below exist ([release README](../deploy/terraform/release/README.md#buck
 
 | Bucket and prefix | Content | Retention | Status |
 | --- | --- | --- | --- |
-| `btp-data-<account-id>-eu-north-1/raw/vbb-rt/` | One feed snapshot every 5 minutes (about 2.3 MB each) | 14 days, by lifecycle rule (about 9 GB stored) | Bucket and lifecycle rule **Built** (#16); uploads planned (#19) |
+| `btp-data-<account-id>-eu-north-1/raw/vbb-rt/` | One feed snapshot every 5 minutes (about 2.3 MB each) | 14 days, by lifecycle rule (about 9 GB stored) | **Built** (#16 bucket and lifecycle rule, #19 uploads) |
 | `btp-data-<account-id>-eu-north-1/history/` | Finalised stop events as Parquet, partitioned by date and mode | Kept; grows about 1–3 GB per month | Planned (M3/M4) |
 | `btp-data-<account-id>-eu-north-1/backups/` | Nightly `pg_dump`; existing keys can't be overwritten | Kept for now; #28 decides retention | Bucket and write guard **Built** (#16); dumps planned (#28) |
 | `btp-web-<account-id>-eu-north-1` | Static site, served by CloudFront | Replaced on deploy | Bucket, CloudFront and upload on deploy **Built** (#16, #17, #18) |

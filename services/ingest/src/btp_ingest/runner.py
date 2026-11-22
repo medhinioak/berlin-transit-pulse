@@ -23,11 +23,13 @@ from btp_ingest.feed import (
     now_utc,
 )
 from btp_ingest.publish import ProducerFatalError, Publisher, make_producer
+from btp_ingest.raw import ArchiveResult, RawArchiver, S3Uploader
 from btp_ingest.settings import IngestSettings
 
 log = logging.getLogger(__name__)
 
 Handler = Callable[[Snapshot], object]
+Archive = Callable[[Snapshot], ArchiveResult]
 
 
 class Source(Protocol):
@@ -62,8 +64,12 @@ def run(
     *,
     clock: Callable[[], float] = time.monotonic,
     wall: Callable[[], datetime] = now_utc,
+    archive: Archive | None = None,
 ) -> None:
     """Poll source every interval_s (start to start) until stop is set, one log line per poll.
+
+    archive, if given, is called for each new snapshot before the log line (it only queues
+    the upload) and its result is logged as `raw`.
 
     429, 5xx and network errors back off exponentially (Backoff); invalid snapshots are
     counted and skipped. Exceptions from the handler end the loop, so handlers log and
@@ -104,6 +110,8 @@ def run(
                     header_age_s=round(age_s, 1),
                     etag=snapshot.etag,
                 )
+                if archive is not None:
+                    fields["raw"] = archive(snapshot)
         fields["duration_ms"] = round((clock() - started) * 1000)
         fields["invalid_total"] = invalid_total
         log.log(level, "poll", extra={"fields": fields})
@@ -119,6 +127,17 @@ def build_source(settings: IngestSettings) -> FeedClient | FixtureSource:
     return FeedClient(settings.feed_url, settings.feed_contact, settings.feed_max_age_s)
 
 
+def build_archiver(settings: IngestSettings) -> RawArchiver | None:
+    """Return the raw snapshot archiver in live mode with a bucket set, otherwise None.
+
+    Raises ValueError if the S3 client can't be built.
+    """
+    if settings.feed_mode != "live" or not settings.raw_bucket:
+        return None
+    uploader = S3Uploader(settings.raw_bucket, settings.aws_region)
+    return RawArchiver(uploader, settings.raw_prefix, settings.raw_interval_s)
+
+
 def main() -> int:
     """Run the ingest loop until SIGTERM or SIGINT; return the exit code."""
     try:
@@ -132,6 +151,12 @@ def main() -> int:
     try:
         source = build_source(settings)
     except (ValueError, FileNotFoundError) as exc:
+        log.error("cannot start: %s", exc)
+        return 2
+    try:
+        archiver = build_archiver(settings)
+    except ValueError as exc:
+        source.close()
         log.error("cannot start: %s", exc)
         return 2
 
@@ -152,6 +177,7 @@ def main() -> int:
                 "mode": settings.feed_mode,
                 "source": target,
                 "interval_s": settings.poll_interval_s,
+                "raw_archive": "on" if archiver else "off",
             }
         },
     )
@@ -161,7 +187,8 @@ def main() -> int:
         # RateGuard lives in one process: after a crash and restart, wait a full interval
         # before the first live request so a restart loop can't exceed VBB's rate limit.
         if settings.feed_mode == "fixtures" or not stop.wait(settings.poll_interval_s):
-            run(source, publisher.handle, settings.poll_interval_s, stop)
+            archive = archiver.maybe_archive if archiver else None
+            run(source, publisher.handle, settings.poll_interval_s, stop, archive=archive)
     except ProducerFatalError as exc:
         # Exit so the container restarts with a new producer.
         log.error("fatal Kafka producer error, exiting: %s", exc)
@@ -169,5 +196,7 @@ def main() -> int:
     finally:
         source.close()
         producer.flush(settings.publish_timeout_s)
+        if archiver:
+            archiver.close()
     log.info("stopped")
     return 0
