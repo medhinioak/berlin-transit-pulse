@@ -42,7 +42,7 @@ on every stack.
 
 | What | Inside the compose network | From the host |
 | --- | --- | --- |
-| Kafka | `kafka:9092` | `localhost:9094` |
+| Kafka | `kafka:9092` | `127.0.0.1:9094` (not `localhost`: IPv4 only) |
 | Postgres | `postgres:5432` | `localhost:5432` |
 | metrics-api | `metrics-api:8000` | `localhost:8000` (OpenAPI docs at `/docs`) |
 | web | `web:8080` | `localhost:8080` (the page; `/api/` goes to metrics-api) |

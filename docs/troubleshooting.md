@@ -103,6 +103,20 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
 
 ## Tooling
 
+### Kafka integration test fails at random: producer refused on `::1`
+
+- **Seen:** 2026-11-21, CI `smoke` job on PR #86 (#18). The same commit's previous run passed.
+- **Symptom:** `test_fixture_set_round_trip` failed with `assert publisher.handle(snapshot)`
+  (`committed: false`), next to repeated librdkafka lines
+  `Connect to ipv6#[::1]:9094 failed: Connection refused`.
+- **Cause:** the broker advertised its host listener as `localhost:9094`, but compose binds the
+  port to `127.0.0.1` only. librdkafka resolves `localhost` to `::1` as well and sometimes tries
+  it first. Each refusal increases the reconnect backoff, until messages pass the 10 s delivery
+  timeout. Containers weren't affected: they use `kafka:9092`.
+- **Fix:** advertise `EXTERNAL://127.0.0.1:9094`, and use `127.0.0.1:9094` as the host default
+  everywhere (service settings, integration tests, READMEs).
+- **Status:** _fixed_
+
 ### `make up` hangs on "load metadata for docker.io/library/python:3.12-slim"
 
 - **Seen:** 2026-11-19, #8 (processor), first image build for the new service.

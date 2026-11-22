@@ -31,7 +31,7 @@ can't be used again, so the container restarts with a new one).
 | `BTP_FEED_MAX_AGE_S` | `180` | an older header is logged as stale but still passed on |
 | `BTP_FIXTURE_SET` | `rush-hour` | `fixtures/vbb-rt/<set>/` to replay (`rush-hour`, `evening`) |
 | `BTP_FIXTURES_DIR` | `fixtures/` in the checkout | set it in containers (the package isn't in the repo there) |
-| `BTP_KAFKA_BOOTSTRAP` | `localhost:9094` | broker; compose sets `kafka:9092` |
+| `BTP_KAFKA_BOOTSTRAP` | `127.0.0.1:9094` | broker; compose sets `kafka:9092` |
 | `BTP_KAFKA_TOPIC` | `trip-updates` | topic to publish to |
 | `BTP_PUBLISH_TIMEOUT_S` | `10` | a message not delivered within this fails (the producer's `message.timeout.ms`); the flush waits 5 s longer, so nothing carries over to the next snapshot |
 | `BTP_LOG_LEVEL` | `INFO` | log level |

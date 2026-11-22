@@ -9,8 +9,8 @@ class ProcessorSettings(BaseServiceSettings):
     """Kafka, database and batching settings; the defaults match the compose dev stack."""
 
     service_name: str = "processor"
-    # localhost:9094 is the compose broker's host listener; compose sets kafka:9092.
-    kafka_bootstrap: str = "localhost:9094"
+    # 127.0.0.1:9094 is the compose broker's host listener (IPv4 only); compose sets kafka:9092.
+    kafka_bootstrap: str = "127.0.0.1:9094"
     kafka_topic: str = "trip-updates"
     kafka_group: str = "btp-processor"
     pg_host: str = "localhost"

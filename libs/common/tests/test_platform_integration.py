@@ -47,7 +47,7 @@ def _table(schema: str) -> sql.Composed:
 def test_trip_updates_topic() -> None:
     """trip-updates has 6 partitions, 24 h retention and the delete cleanup policy."""
     admin = AdminClient(
-        {"bootstrap.servers": os.environ.get("BTP_KAFKA_BOOTSTRAP", "localhost:9094")}
+        {"bootstrap.servers": os.environ.get("BTP_KAFKA_BOOTSTRAP", "127.0.0.1:9094")}
     )
     topics = admin.list_topics(timeout=10).topics
     assert "trip-updates" in topics
