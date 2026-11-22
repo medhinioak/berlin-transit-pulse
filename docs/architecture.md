@@ -69,7 +69,7 @@ proof of concept differ only in their Terraform.
 | [`schedule`](../services/schedule/README.md) | Static GTFS import, versions, Berlin and mode flags | VBB static zip → Postgres `schedule` | **Built** (#5): versioned import with atomic swap. Weekly refresh and pruning: planned M3 (#24) |
 | [`metrics-jobs`](../services/metrics-jobs/README.md) | Metric models, data-quality checks, Parquet export | Postgres `events`, `schedule` → Postgres `marts`; S3 | **Started** (#9): two plain SQL views. Data quality M3 (#25), metrics M3 (#29), dbt M4 (#32), Parquet M4 (#34) |
 | [`metrics-api`](../services/metrics-api/README.md) | Read-only HTTP API for the UI | Postgres `marts` (read-only role) | **Built** (#9): `/health`, `/v1/now/by-mode`. History endpoints: planned M4 (#35) |
-| [`web`](../web/) | Static, mobile-first commuter UI | metrics-api, through CloudFront | **Started** (#10): one live page (plain HTML, CSS, JS) served by nginx in compose, `/api/` proxied to metrics-api. In the release, CloudFront serves it from S3 (#17); upload with the deploy (#18). Full UI M4 (#36, #37, #38) |
+| [`web`](../web/) | Static, mobile-first commuter UI | metrics-api, through CloudFront | **Started** (#10): one live page (plain HTML, CSS, JS) served by nginx in compose, `/api/` proxied to metrics-api. In the release, CloudFront serves it from S3 (#17), uploaded by every deploy (#18). Full UI M4 (#36, #37, #38) |
 | `libs/common` | Settings, JSON logging, fixture loading | n/a | **Built** |
 
 ## Technology choices
@@ -92,7 +92,7 @@ ADR is planned, the row says which; accepted ADRs are linked.
 | **Monitoring and alerts** | App metrics to CloudWatch (within the free allowance of 10 custom metrics), alarms to email through SNS, healthchecks.io dead-man's switch for the poller, Kafka consumer lag as a metric | Prometheus and Grafana on the box (too much RAM) | Nearly free and AWS-native. Less visual than Grafana, so the status page is the human-facing view |
 | **API** | FastAPI, read-only, serving precomputed aggregates with cache headers | Querying raw events per request | Fast and cheap; CloudFront absorbs traffic spikes. `/api/*` through CloudFront to nginx on the server, port 80 open to CloudFront only: **Built** in M2 (#17, [ADR-0021](adr/0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md)) |
 | **Dashboard** | Mobile-first static frontend on S3 and CloudFront: line search, "Right now vs normal", hour-by-weekday heatmap, network overview | Grafana as the public UI; Streamlit | A UI built for commuters rather than analysts, at the price of more frontend work. CloudFront in front of S3 **Built** in M2 (#17, [ADR-0021](adr/0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md)) |
-| **Infrastructure and delivery** | Terraform (EC2, S3 with lifecycle rules, IAM, CloudFront, SNS, Budgets); GitHub Actions (tests, arm64 images to GHCR, `terraform plan`); deploys through SSM Run Command. *Planned ADR-0012* | CDK; deploys over SSH | Reproducible, and no open SSH port |
+| **Infrastructure and delivery** | Terraform (EC2, S3 with lifecycle rules, IAM, CloudFront, SNS, Budgets); GitHub Actions (tests, arm64 images to GHCR on native arm runners); deploys through SSM Run Command with GitHub OIDC, pull and restart. **Built** in M2 (#18, [ADR-0012](adr/0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md)) | CDK; deploys over SSH; access keys in GitHub; QEMU builds; blue-green | Reproducible, no open SSH port and no keys. A minute or two of downtime per deploy |
 | **Service boundaries** | Microservices, one schema and one database role per service in a shared Postgres. *Planned ADR-0014* | One database per service | A pragmatic step short of a database per service, which a 2 GB host cannot carry |
 
 ## Data stores
@@ -131,7 +131,7 @@ uploads below exist ([release README](../deploy/terraform/release/README.md#buck
 | `btp-data-<account-id>-eu-north-1/raw/vbb-rt/` | One feed snapshot every 5 minutes (about 2.3 MB each) | 14 days, by lifecycle rule (about 9 GB stored) | Bucket and lifecycle rule **Built** (#16); uploads planned (#19) |
 | `btp-data-<account-id>-eu-north-1/history/` | Finalised stop events as Parquet, partitioned by date and mode | Kept; grows about 1–3 GB per month | Planned (M3/M4) |
 | `btp-data-<account-id>-eu-north-1/backups/` | Nightly `pg_dump`; existing keys can't be overwritten | Kept for now; #28 decides retention | Bucket and write guard **Built** (#16); dumps planned (#28) |
-| `btp-web-<account-id>-eu-north-1` | Static site, served by CloudFront | Replaced on deploy | Bucket and CloudFront **Built** (#16, #17); deploy planned (#18) |
+| `btp-web-<account-id>-eu-north-1` | Static site, served by CloudFront | Replaced on deploy | Bucket, CloudFront and upload on deploy **Built** (#16, #17, #18) |
 
 Terraform state lives in its own bucket (#13).
 
@@ -234,21 +234,25 @@ The 2-minute feed age is a starting value: a header 448 s old was seen at night 
 - **Health endpoint:** `/health` on the API returns 503 when the database is unreachable or the
   newest feed data is older than 5 minutes.
 
-A runbook (deploy, roll back, restore, shut down) is created with the release stack in M2.
+The [runbook](runbook.md) covers deploy, roll back, logs, the 13 December timetable change and shut down; restore follows with backups (#28).
 
 ## Security and access
 
-- **No SSH.** The release server is reached through SSM Run Command. GitHub Actions
-  authenticates with OIDC (M2); there are no long-lived access keys anywhere
-  ([`aws-account.md`](aws-account.md)).
+- **No SSH.** The release server is reached through SSM Run Command and Session Manager.
+  GitHub Actions authenticates with OIDC as `btp-release-deploy`, which can only send commands
+  to the release instance, write the web bucket and invalidate the distribution; there are no
+  long-lived access keys anywhere ([ADR-0012](adr/0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md),
+  [`aws-account.md`](aws-account.md)).
 - **Network.** In compose, Kafka, Postgres and the API bind to `127.0.0.1` only, so they are not
   exposed on a public interface whatever the security group says. In the release, the API is
   reached only through nginx on host port 80, and the security group opens that port to
   CloudFront's origin-facing ranges only ([ADR-0021](adr/0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md)).
 - **Database access.** One role per service, each owning its own schema; the API role is
   read-only.
-- **Secrets.** Compose uses development passwords. The release stack replaces them with real
-  secrets in M2; the mechanism is not decided yet. No secrets in the repository.
+- **Secrets.** Compose uses development passwords locally. In the release, Terraform generates
+  the Postgres passwords into SSM Parameter Store (SecureString), and each deploy renders them
+  into `/opt/btp/.env` (mode 600) on the server with the instance role. No secrets in the
+  repository.
 - **Infrastructure changes.** Everything comes from Terraform, tagged `Project`, `Stack` and
   `ManagedBy`. A human maintainer applies after reading the plan; AI coding agents never run
   `terraform apply` or `terraform destroy`.
@@ -260,8 +264,10 @@ A runbook (deploy, roll back, restore, shut down) is created with the release st
 - **CI** (GitHub Actions, on every push and pull request): lint (`ruff`), type check (`mypy`
   strict, per package), unit tests with coverage, and a build of every service's Docker image.
   CI never calls the live feed.
-- **CD (M2, #18):** build arm64 images to GHCR and deploy through SSM Run Command. Terraform
-  plans run in CI; the apply is manual.
+- **CD** (`.github/workflows/release.yml`, after CI passes on `main`; **Built**, #18): arm64
+  images to GHCR, deploy through SSM Run Command with GitHub OIDC, the page to S3 with a
+  CloudFront invalidation, and a smoke test of the public URL. Rollback by running the workflow
+  with an older SHA ([runbook](runbook.md)). Terraform plans and applies are manual.
 - **Rebuild from zero:** the whole stack must be rebuildable with Terraform in under 30 minutes,
   and the drill is timed in M5 (#41). Together with the nightly `pg_dump` and the Parquet
   history in S3, this is the recovery plan for instance or disk loss.
@@ -315,6 +321,6 @@ These are accepted for v1 and documented here so a reviewer does not have to fin
 
 ## Planned ADRs
 
-Sixteen ADRs were planned up front. Six ADRs exist: ADR-0009 and ADR-0017 to ADR-0021.
+Sixteen ADRs were planned up front. Seven ADRs exist: ADR-0009, ADR-0012 and ADR-0017 to ADR-0021.
 [`adr/README.md`](adr/README.md) lists each with its status, the section of these docs that
 holds its rationale today, and the milestone that writes it.

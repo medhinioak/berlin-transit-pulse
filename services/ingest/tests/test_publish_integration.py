@@ -20,7 +20,7 @@ from btp_ingest.publish import Publisher, make_producer
 
 pytestmark = pytest.mark.integration
 
-BOOTSTRAP = os.environ.get("BTP_KAFKA_BOOTSTRAP", "localhost:9094")
+BOOTSTRAP = os.environ.get("BTP_KAFKA_BOOTSTRAP", "127.0.0.1:9094")
 START = datetime(2026, 11, 18, 17, 3, 41, tzinfo=UTC)
 
 

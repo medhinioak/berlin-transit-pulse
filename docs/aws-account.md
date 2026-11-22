@@ -75,8 +75,9 @@ Terraform and other SDK tools pick up the same profile with `AWS_PROFILE=btp`.
   reading the plan.
 - No console changes beyond this baseline. Everything else is Terraform under
   `deploy/terraform/`.
-- No long-lived access keys, for the admin user or anything else. GitHub Actions will use
-  OIDC (M2).
+- No long-lived access keys, for the admin user or anything else. GitHub Actions uses OIDC
+  and the role `btp-release-deploy` (`deploy/terraform/release/github_oidc.tf`,
+  [ADR-0012](adr/0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md)).
 
 ## Access for additional people
 
@@ -97,5 +98,4 @@ plan. Check MSK before the microservices proof-of-concept issue starts.
 
 - **M2:** activate the `Project` cost allocation tag in Billing once the first tagged
   resource exists, so Cost Explorer can split costs by stack.
-- **M2:** GitHub Actions OIDC provider and deploy role, in Terraform.
 - **Paid plan:** reconsider IAM Identity Center and AWS Organizations.

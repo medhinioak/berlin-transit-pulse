@@ -35,6 +35,9 @@ Keep this list true to the Makefile (`make help` lists every target).
 - Pre-commit hooks: uv run pre-commit run --all-files
 - Record new feed fixtures: make fixtures LABEL=rush-hour|evening (calls the live feed, needs
   BTP_FEED_CONTACT; see fixtures/README.md and Rules)
+- Deploy: automatic after CI passes on main (.github/workflows/release.yml: arm64 images to GHCR,
+  SSM deploy, page to S3, smoke test). Redeploy or roll back: gh workflow run release.yml
+  [-f sha=<sha on main>]. Server shell, logs, 13 Dec step: docs/runbook.md
 - Terraform: make tf-validate STACK=bootstrap (no credentials; init -backend=false, fmt, validate).
   make tf-plan STACK=… is for the maintainer. Never apply from here (deploy/terraform/README.md)
 - GitHub: use the gh CLI for issues, PRs and CI

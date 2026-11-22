@@ -30,7 +30,7 @@ is logged as a warning (`committed: false`) and the batch is consumed again late
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `BTP_KAFKA_BOOTSTRAP` | `localhost:9094` | broker; compose sets `kafka:9092` |
+| `BTP_KAFKA_BOOTSTRAP` | `127.0.0.1:9094` | broker; compose sets `kafka:9092` |
 | `BTP_KAFKA_TOPIC` | `trip-updates` | topic to consume |
 | `BTP_KAFKA_GROUP` | `btp-processor` | consumer group |
 | `BTP_PG_HOST`, `BTP_PG_PORT`, `BTP_PG_DB` | `localhost`, `5432`, `btp` | Postgres |

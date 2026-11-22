@@ -250,7 +250,7 @@ def test_tombstone_sets_removed_at(conn: Connection, prefixes: list[str]) -> Non
 
 # --- Kafka: crash after the database commit, before the offset commit ---------------------
 
-BOOTSTRAP = os.environ.get("BTP_KAFKA_BOOTSTRAP", "localhost:9094")
+BOOTSTRAP = os.environ.get("BTP_KAFKA_BOOTSTRAP", "127.0.0.1:9094")
 
 
 class Crash(Exception):
