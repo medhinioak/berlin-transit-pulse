@@ -42,9 +42,9 @@ services:
     environment:
       BTP_FEED_MODE: live
       # Raw snapshot archive (#19, ADR-0008): credentials from the instance role (IMDSv2,
-      # hop limit 2), bucket from SSM /btp/release/data_bucket.
+      # hop limit 2), bucket from SSM /btp/release/data_bucket. Region: BTP_AWS_REGION,
+      # default eu-north-1.
       BTP_RAW_BUCKET: ${BTP_RAW_BUCKET:?set BTP_RAW_BUCKET (SSM /btp/release/data_bucket)}
-      AWS_REGION: eu-north-1
 
   stop-event-processor:
     pull_policy: always

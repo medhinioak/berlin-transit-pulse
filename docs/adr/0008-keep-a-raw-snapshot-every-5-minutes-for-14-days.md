@@ -21,13 +21,18 @@ budget is €20 a month ([cost](../cost.md)).
 
 In live mode the ingest service uploads one snapshot it has already fetched to
 `s3://btp-data-<account>-eu-north-1/raw/vbb-rt/date=YYYY-MM-DD/hour=HH/YYYYMMDDTHHMMSSZ.pb.gz`
-when at least 5 minutes of **feed header time** have passed since the last successful upload.
-The S3 lifecycle rule from #16 deletes objects after 14 days.
+for the first snapshot of each 5-minute slot of **feed header time**. Slots are aligned to the
+epoch (:00, :05, … UTC), so a day has 288 objects whatever the poll timing. The S3 lifecycle
+rule from #16 deletes objects after 14 days.
 
 - **What is stored:** the response body exactly as received (gzip), with `Content-Type:
   application/x-protobuf`, `Content-Encoding: gzip` and metadata `feed-ts`, `etag` and
-  `entity-count`. A body sent without gzip is compressed at level 6. No extra request goes
-  to VBB.
+  `entity-count`. A body sent without gzip is compressed at level 6, in the upload thread. No
+  extra request goes to VBB. Clients that honour `Content-Encoding` may unpack the object on
+  download; replays read it with boto3 or the AWS CLI, which keep the gzip bytes.
+- **Slots, not "5 minutes since the last upload":** issue #19 planned the latter. With 30 s
+  polls and jittery header times it drifts, giving gaps of 300–330 s and often 11 objects an
+  hour. A failed upload leaves its slot open, so the next snapshot in the slot retries.
 - **Keys** are UTC from the header timestamp, in Hive-style partitions, so DuckDB or Athena
   can read them later. A snapshot uploaded twice (a restart) gets the same key and overwrites
   itself.
@@ -35,7 +40,8 @@ The S3 lifecycle rule from #16 deletes objects after 14 days.
   that arrives while an upload is still running is skipped and counted (`raw_skipped_busy`).
   A failure is logged and counted (`raw_failed`) without retries beyond boto3's standard
   retry mode. It doesn't move the last-success time, so the next poll tries again. On SIGTERM
-  the service waits at most 10 s for a running upload.
+  the service waits at most 10 s for a running upload; ingest's stop grace period is 60 s so
+  that fits after the Kafka flushes.
 - **Logging:** the upload is asynchronous, so the `poll` line can't say whether it
   succeeded. It carries `raw` = `queued`, `skipped_busy` or `not_due`. The worker writes its
   own `raw upload` line with `raw_key`, `raw_bytes`, `duration_ms`, `ok`, the totals and, on

@@ -117,30 +117,44 @@ def test_both_hours_of_the_dst_fall_back_get_distinct_keys() -> None:
     assert raw_key(PREFIX, first) != raw_key(PREFIX, second)
 
 
-def test_gzip_wire_bytes_are_uploaded_unchanged() -> None:
-    """A gzip body from VBB is stored byte for byte."""
-    s = snap()
-    assert gzip_body(s) == s.wire
-
-
-def test_plain_wire_bytes_are_gzipped() -> None:
-    """A body sent without gzip is compressed and decompresses to the original."""
-    s = snap(wire=b"plain protobuf bytes")
-    assert gzip.decompress(gzip_body(s)) == b"plain protobuf bytes"
-
-
-def test_first_uploads_then_waits_for_the_interval(
+def test_gzip_wire_bytes_are_uploaded_unchanged(
     archiver: RawArchiver, uploader: FakeUploader
 ) -> None:
-    """First snapshot uploads; nothing until 300 s of header time later; then the next."""
-    assert archive_and_wait(archiver, snap(T0)) == "queued"
-    assert archive_and_wait(archiver, snap(T0 + timedelta(seconds=30))) == "not_due"
-    assert archive_and_wait(archiver, snap(T0 + timedelta(seconds=299))) == "not_due"
-    assert archive_and_wait(archiver, snap(T0 + timedelta(seconds=300))) == "queued"
-    assert [c[0] for c in uploader.calls] == [
-        raw_key(PREFIX, T0),
-        raw_key(PREFIX, T0 + timedelta(seconds=300)),
-    ]
+    """A gzip body from VBB is stored byte for byte."""
+    s = snap()
+    assert gzip_body(s.wire, s.wire_gzip) == s.wire
+    archive_and_wait(archiver, s)
+    assert uploader.calls[0][1] == s.wire
+
+
+def test_plain_wire_bytes_are_gzipped_in_the_worker(
+    archiver: RawArchiver, uploader: FakeUploader
+) -> None:
+    """A body sent without gzip is compressed (by the worker) and decompresses to the original."""
+    archive_and_wait(archiver, snap(wire=b"plain protobuf bytes"))
+    assert gzip.decompress(uploader.calls[0][1]) == b"plain protobuf bytes"
+
+
+def test_first_snapshot_of_each_slot_uploads(archiver: RawArchiver, uploader: FakeUploader) -> None:
+    """Slots of 300 s start at :00, :05, … UTC; one upload per slot."""
+    at = [datetime(2026, 11, 22, 17, m, sec, tzinfo=UTC) for m, sec in [(3, 41), (4, 59)]]
+    at += [datetime(2026, 11, 22, 17, m, sec, tzinfo=UTC) for m, sec in [(5, 0), (9, 59)]]
+    at += [datetime(2026, 11, 22, 17, 10, 0, tzinfo=UTC)]
+    results = [archive_and_wait(archiver, snap(t)) for t in at]
+    assert results == ["queued", "not_due", "queued", "not_due", "queued"]
+    assert [c[0] for c in uploader.calls] == [raw_key(PREFIX, at[i]) for i in (0, 2, 4)]
+
+
+def test_irregular_polls_still_give_12_uploads_an_hour(
+    archiver: RawArchiver, uploader: FakeUploader
+) -> None:
+    """Header times 31 s apart don't drift: one hour gives exactly 12 objects."""
+    start = datetime(2026, 11, 22, 17, 0, 0, tzinfo=UTC)
+    t = start
+    while t < start + timedelta(hours=1):
+        archive_and_wait(archiver, snap(t))
+        t += timedelta(seconds=31)
+    assert len(uploader.calls) == 12
 
 
 def test_header_time_going_back_does_not_upload(
@@ -238,5 +252,25 @@ def test_s3_uploader_sends_type_encoding_and_metadata() -> None:
                 "Metadata": metadata,
             },
         )
-        S3Uploader("btp-data-test", client).put("raw/vbb-rt/x.pb.gz", b"gz", metadata)
+        S3Uploader("btp-data-test", "eu-north-1", client).put("raw/vbb-rt/x.pb.gz", b"gz", metadata)
         stubber.assert_no_pending_responses()
+
+
+def test_s3_client_uses_the_configured_region(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The region comes from the setting; AWS_REGION alone is ignored by botocore."""
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+    monkeypatch.setenv("AWS_REGION", "us-west-2")
+    uploader = S3Uploader("btp-data-test", "eu-north-1")
+    assert uploader._client.meta.region_name == "eu-north-1"  # noqa: SLF001
+
+
+def test_bad_region_is_a_value_error() -> None:
+    """A region boto3 refuses becomes a ValueError, which main turns into exit code 2."""
+    with pytest.raises(ValueError, match="cannot create the S3 client"):
+        S3Uploader("btp-data-test", "not a region!")
+
+
+def test_wait_idle_returns_after_close(archiver: RawArchiver) -> None:
+    """The close sentinel is marked done too, so wait_idle never hangs after close."""
+    archiver.close(1.0)
+    archiver.wait_idle()

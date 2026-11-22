@@ -22,7 +22,7 @@ make down          # stop, keep data
 | `kafka-init` | `apache/kafka:4.4.0` | Creates the topics, then exits 0. Safe to re-run (`--if-not-exists`) |
 | `postgres` | `postgres:16.16` | Database `btp` with one schema per writing service |
 | `schedule-import` | `services/schedule/Dockerfile` | Imports and activates the static GTFS, then exits 0. A no-op when the zip is unchanged. Imports the mini GTFS offline by default; `BTP_FEED_MODE=live` downloads the VBB static GTFS (see `services/schedule/README.md`) |
-| `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 30 s stop grace period |
+| `ingest` | `services/ingest/Dockerfile` | Polls the feed and publishes changed trips to `trip-updates` ([schemas/trip-updates.md](../../schemas/trip-updates.md)). Replays `fixtures/vbb-rt/$BTP_FIXTURE_SET` (default `rush-hour`) unless `BTP_FEED_MODE=live`. 256 MB limit, 60 s stop grace period (a live request, the Kafka flushes and a raw snapshot upload) |
 | `stop-event-processor` | `services/stop-event-processor/Dockerfile` | Consumes `trip-updates` and keeps the latest prediction per trip and stop in `events.trip_state` and `events.stop_predictions` as `btp_processor` ([README](../../services/stop-event-processor/README.md)). 256 MB limit |
 | `metrics-jobs-apply` | `services/metrics-jobs/Dockerfile` | Creates or replaces the `marts` views as `btp_metrics_jobs`, then exits 0. Waits up to 60 s for the processor's tables ([README](../../services/metrics-jobs/README.md)) |
 | `metrics-api` | `services/metrics-api/Dockerfile` | Read-only HTTP API on port 8000 as `btp_api` ([README](../../services/metrics-api/README.md)). In fixtures mode it pins "now" to the recording time (ADR-0019). 128 MB limit |
@@ -134,7 +134,8 @@ BTP_IMAGE_TAG=<sha> docker compose -p btp-live --env-file /opt/btp/.env \
 To check that it renders:
 
 ```sh
-BTP_IMAGE_TAG=0000000000000000000000000000000000000000 docker compose -p btp-live \
+BTP_IMAGE_TAG=0000000000000000000000000000000000000000 BTP_RAW_BUCKET=example \
+  docker compose -p btp-live \
   -f deploy/compose/compose.yaml -f deploy/compose/compose.release.yaml config
 ```
 

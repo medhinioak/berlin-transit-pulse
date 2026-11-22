@@ -33,5 +33,7 @@ class IngestSettings(BaseServiceSettings):
     # Raw snapshot archive (btp_ingest.raw, ADR-0008). Unset bucket means off; live mode only.
     raw_bucket: str | None = None
     raw_prefix: str = "raw/vbb-rt/"
-    # Measured on the feed header timestamp since the last successful upload.
+    # Slot length in feed header seconds: the first snapshot of each slot is archived.
     raw_interval_s: float = Field(default=300.0, ge=MIN_RAW_INTERVAL_S)
+    # Passed to boto3 as region_name (botocore ignores AWS_REGION; only AWS_DEFAULT_REGION).
+    aws_region: str = "eu-north-1"

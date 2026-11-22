@@ -30,11 +30,16 @@ def raw_key(prefix: str, feed_timestamp: datetime) -> str:
     return f"{prefix}date={ts:%Y-%m-%d}/hour={ts:%H}/{ts:%Y%m%dT%H%M%SZ}.pb.gz"
 
 
-def gzip_body(snapshot: Snapshot) -> bytes:
-    """Return the snapshot body as gzip: the wire bytes unchanged if they already are."""
-    if snapshot.wire_gzip:
-        return snapshot.wire
-    return gzip.compress(snapshot.wire, compresslevel=GZIP_LEVEL)
+def gzip_body(wire: bytes, wire_gzip: bool) -> bytes:
+    """Return the body as gzip: the wire bytes unchanged if they already are."""
+    if wire_gzip:
+        return wire
+    return gzip.compress(wire, compresslevel=GZIP_LEVEL)
+
+
+def slot(feed_timestamp: datetime, interval_s: float) -> int:
+    """Return the number of the interval_s slot (aligned to the Unix epoch) the time falls in."""
+    return int(feed_timestamp.timestamp() // interval_s)
 
 
 class Uploader(Protocol):
@@ -48,17 +53,28 @@ class Uploader(Protocol):
 class S3Uploader:
     """Uploads gzipped protobuf objects to one bucket with boto3."""
 
-    def __init__(self, bucket: str, client: "S3Client | None" = None) -> None:
-        """Use the given client, or one with standard retries and short timeouts."""
+    def __init__(self, bucket: str, region: str, client: "S3Client | None" = None) -> None:
+        """Use the given client, or one for region with standard retries and short timeouts.
+
+        Raises ValueError if boto3 can't build the client (bad region or AWS config).
+        """
         # Imported here: boto3 adds about 30 MB, which fixtures mode and local runs don't need.
         import boto3
         from botocore.config import Config
+        from botocore.exceptions import BotoCoreError
 
         self.bucket = bucket
-        self._client = client or boto3.client(
-            "s3",
-            config=Config(retries={"mode": "standard"}, connect_timeout=10, read_timeout=30),
-        )
+        if client is not None:
+            self._client = client
+            return
+        try:
+            self._client = boto3.client(
+                "s3",
+                region_name=region,
+                config=Config(retries={"mode": "standard"}, connect_timeout=10, read_timeout=30),
+            )
+        except BotoCoreError as exc:
+            raise ValueError(f"cannot create the S3 client: {exc}") from exc
 
     def put(self, key: str, body: bytes, metadata: dict[str, str]) -> None:
         """Upload one snapshot with its content type, encoding and metadata."""
@@ -77,13 +93,19 @@ class _Job:
     """One upload, holding only bytes and metadata (never the FeedMessage)."""
 
     key: str
-    body: bytes
+    wire: bytes
+    wire_gzip: bool
     metadata: dict[str, str]
     feed_timestamp: datetime
 
 
 class RawArchiver:
-    """Uploads a snapshot when interval_s passed since the last success; never blocks polling."""
+    """Uploads the first snapshot of each interval_s slot of header time; never blocks polling.
+
+    Slots are aligned to the epoch (with 300 s: :00, :05, … UTC), so the archive has a steady
+    288 objects a day whatever the poll timing. A failed upload leaves its slot open, so the
+    next snapshot in the same slot tries again.
+    """
 
     def __init__(
         self,
@@ -127,9 +149,11 @@ class RawArchiver:
                 )
                 return "skipped_busy"
             self._busy = True
+        # Compression (only for a plain body) happens in the worker, not on the poll thread.
         job = _Job(
             key=raw_key(self.prefix, snapshot.feed_timestamp),
-            body=gzip_body(snapshot),
+            wire=snapshot.wire,
+            wire_gzip=snapshot.wire_gzip,
             metadata={
                 "feed-ts": snapshot.feed_timestamp.astimezone(UTC).isoformat(),
                 "etag": snapshot.etag or "",
@@ -160,23 +184,30 @@ class RawArchiver:
         self._jobs.join()
 
     def _due(self, feed_timestamp: datetime) -> bool:
-        """Return True if no upload succeeded yet or interval_s passed since the last one."""
+        """Return True if the snapshot's slot is later than the last successful upload's."""
         if self._last_success is None:
             return True
-        return (feed_timestamp - self._last_success).total_seconds() >= self.interval_s
+        return slot(feed_timestamp, self.interval_s) > slot(self._last_success, self.interval_s)
 
     def _work(self) -> None:
         """Upload queued jobs one at a time until close() sends None."""
-        while (job := self._jobs.get()) is not None:
-            self._upload(job)
-            self._jobs.task_done()
+        while True:
+            job = self._jobs.get()
+            try:
+                if job is None:
+                    return
+                self._upload(job)
+            finally:
+                self._jobs.task_done()
 
     def _upload(self, job: _Job) -> None:
         """Run one upload, log one line and update the counters."""
         started = self._clock()
         error: Exception | None = None
+        body = b""
         try:
-            self.uploader.put(job.key, job.body, job.metadata)
+            body = gzip_body(job.wire, job.wire_gzip)
+            self.uploader.put(job.key, body, job.metadata)
         except Exception as exc:  # any failure is logged and counted, never fatal
             error = exc
         with self._lock:
@@ -187,7 +218,7 @@ class RawArchiver:
             self._busy = False
             fields: dict[str, object] = {
                 "raw_key": job.key,
-                "raw_bytes": len(job.body),
+                "raw_bytes": len(body),
                 "duration_ms": round((self._clock() - started) * 1000),
                 "ok": error is None,
                 "raw_failed": self.failed,

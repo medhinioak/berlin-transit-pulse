@@ -128,12 +128,14 @@ def build_source(settings: IngestSettings) -> FeedClient | FixtureSource:
 
 
 def build_archiver(settings: IngestSettings) -> RawArchiver | None:
-    """Return the raw snapshot archiver in live mode with a bucket set, otherwise None."""
+    """Return the raw snapshot archiver in live mode with a bucket set, otherwise None.
+
+    Raises ValueError if the S3 client can't be built.
+    """
     if settings.feed_mode != "live" or not settings.raw_bucket:
         return None
-    return RawArchiver(
-        S3Uploader(settings.raw_bucket), settings.raw_prefix, settings.raw_interval_s
-    )
+    uploader = S3Uploader(settings.raw_bucket, settings.aws_region)
+    return RawArchiver(uploader, settings.raw_prefix, settings.raw_interval_s)
 
 
 def main() -> int:
@@ -151,8 +153,13 @@ def main() -> int:
     except (ValueError, FileNotFoundError) as exc:
         log.error("cannot start: %s", exc)
         return 2
+    try:
+        archiver = build_archiver(settings)
+    except ValueError as exc:
+        source.close()
+        log.error("cannot start: %s", exc)
+        return 2
 
-    archiver = build_archiver(settings)
     stop = threading.Event()
 
     def _request_stop(signum: int, _frame: FrameType | None) -> None:

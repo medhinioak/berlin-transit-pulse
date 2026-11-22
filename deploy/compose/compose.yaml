@@ -141,8 +141,9 @@ services:
       kafka-init:
         condition: service_completed_successfully
     mem_limit: 256m
-    # A live request can take up to 20 s (timeout), longer than Docker's default 10 s.
-    stop_grace_period: 30s
+    # Shutdown can take: a live request (20 s timeout), the Kafka flushes (up to 15 + 10 s)
+    # and a running raw snapshot upload (up to 10 s). 60 s covers all of them.
+    stop_grace_period: 60s
     volumes:
       - ../../fixtures/vbb-rt:/fixtures/vbb-rt:ro
     restart: unless-stopped

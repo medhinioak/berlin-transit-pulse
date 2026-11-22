@@ -324,7 +324,6 @@ def test_archiver_only_in_live_mode_with_a_bucket(
         monkeypatch.setenv("BTP_RAW_BUCKET", bucket)
     else:
         monkeypatch.delenv("BTP_RAW_BUCKET", raising=False)
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-north-1")
     archiver = build_archiver(IngestSettings())
     assert (archiver is not None) is on
     if archiver is not None:
@@ -337,4 +336,13 @@ def test_archiver_only_in_live_mode_with_a_bucket(
 def test_raw_interval_below_60_s_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """BTP_RAW_INTERVAL_S below 60 is refused at startup."""
     monkeypatch.setenv("BTP_RAW_INTERVAL_S", "30")
+    assert main() == 2
+
+
+def test_main_exits_2_if_the_s3_client_cannot_be_built(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bad region is a startup error (exit 2), not a traceback."""
+    monkeypatch.setenv("BTP_FEED_MODE", "live")
+    monkeypatch.setenv("BTP_FEED_CONTACT", "https://example.org/contact")
+    monkeypatch.setenv("BTP_RAW_BUCKET", "btp-data-x")
+    monkeypatch.setenv("BTP_AWS_REGION", "not a region!")
     assert main() == 2
