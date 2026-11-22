@@ -24,7 +24,9 @@ only way onto the server:
 
 - **AWS sign-in through GitHub OIDC.** The release stack has the GitHub OIDC provider and the role
   `btp-release-deploy`, trusted only for tokens with `sub =
-  repo:medhinioak/berlin-transit-pulse:ref:refs/heads/main`. The role can do four things:
+  repo:medhinioak@36889960/berlin-transit-pulse@1462859808:ref:refs/heads/main`. The repository
+  uses GitHub's immutable OIDC subject, which adds the owner and repository IDs, so a recreated
+  repository with the same name can't assume the role. The role can do four things:
   - `ssm:SendCommand` with `AWS-RunShellScript` on the release instance (tag conditions on
     `Project` and `Stack`);
   - read the command results;

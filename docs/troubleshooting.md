@@ -6,6 +6,23 @@ fixed. Newest first. Each entry has the same fields so it can be skimmed:
 
 Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _open_.
 
+## Deploy
+
+### Release workflow can't assume the deploy role through OIDC
+
+- **Seen:** 2026-11-22, #86 (release workflow), runs 44964956549 and 45061036015.
+- **Symptom:** the `deploy` job failed in `configure-aws-credentials` after 12 retries:
+  `Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+  The image build had passed.
+- **Cause:** the repository uses GitHub's immutable OIDC subject
+  (`gh api repos/medhinioak/berlin-transit-pulse/actions/oidc/customization/sub` shows
+  `"use_immutable_subject": true`), so the token's `sub` is
+  `repo:medhinioak@36889960/berlin-transit-pulse@1462859808:ref:refs/heads/main`. The trust
+  policy of `btp-release-deploy` expected `repo:medhinioak/berlin-transit-pulse:ref:refs/heads/main`.
+- **Fix:** the trust policy in `deploy/terraform/release/github_oidc.tf` now expects the
+  immutable subject (ADR-0012). If the repository moves or the setting changes, update the prefix.
+- **Status:** _fixed_ once the release stack is applied
+
 ## Feed
 
 ### Feed header several minutes old at night

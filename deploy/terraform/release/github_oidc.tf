@@ -4,8 +4,11 @@
 # invalidate the distribution. Nothing else.
 # Decisions and their reasons: docs/adr/0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md
 
+# The repository uses GitHub's immutable OIDC subject: owner and repository carry their numeric
+# IDs, so a deleted and recreated repository with the same name gets a different subject.
+# Check the prefix with: gh api repos/medhinioak/berlin-transit-pulse/actions/oidc/customization/sub
 locals {
-  github_repository = "medhinioak/berlin-transit-pulse"
+  github_subject_prefix = "repo:medhinioak@36889960/berlin-transit-pulse@1462859808"
 }
 
 # With AWS provider v6 the thumbprint is optional: IAM trusts GitHub's certificate authority.
@@ -34,7 +37,7 @@ data "aws_iam_policy_document" "deploy_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${local.github_repository}:ref:refs/heads/main"]
+      values   = ["${local.github_subject_prefix}:ref:refs/heads/main"]
     }
   }
 }
