@@ -38,7 +38,9 @@ class JsonFormatter(logging.Formatter):
             entry.update(
                 {key: v for k, v in fields.items() if (key := str(k)) not in RESERVED_KEYS}
             )
-        if record.exc_info:
+        # exc_info is (None, None, None) when log.exception() runs outside an except block;
+        # writing "NoneType: None" would make a healthy line look like an error.
+        if record.exc_info and record.exc_info[0] is not None:
             entry["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(entry, ensure_ascii=False, default=str)
 

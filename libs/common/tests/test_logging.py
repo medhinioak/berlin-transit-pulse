@@ -123,6 +123,21 @@ def test_fields_never_set_a_reserved_key(key: str, capsys: pytest.CaptureFixture
     _configure()
     logging.getLogger("btp.test").warning("poll", extra={"fields": {key: "spoofed"}})
     [entry] = _lines(capsys)
-    assert entry.get(key) != "spoofed"
+    expected = {"level": "WARNING", "service": "ingest", "logger": "btp.test", "message": "poll"}
     if key == "exc_info":
         assert key not in entry
+    elif key == "ts":
+        datetime.fromisoformat(str(entry["ts"]))  # the real timestamp, not the field
+    else:
+        assert entry[key] == expected[key]
+
+
+def test_exception_logged_outside_an_except_block_has_no_exc_info(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """log.exception() with no active exception doesn't write "NoneType: None"."""
+    _configure()
+    logging.getLogger().exception("no exception here")
+    [entry] = _lines(capsys)
+    assert "exc_info" not in entry
+    assert entry["level"] == "ERROR"
