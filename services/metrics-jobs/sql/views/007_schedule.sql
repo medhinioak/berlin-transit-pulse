@@ -3,8 +3,7 @@
 -- No active version: v_schedule_status has no row and v_schedule_trips is empty.
 CREATE OR REPLACE VIEW marts.v_schedule_status AS
 SELECT version_id, feed_start_date, feed_end_date, activated_at
-FROM schedule.versions
-WHERE status = 'active';
+FROM schedule.v_active_version;
 
 CREATE OR REPLACE VIEW marts.v_schedule_trips AS
 SELECT trip_id

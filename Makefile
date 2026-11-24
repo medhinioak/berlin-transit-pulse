@@ -13,8 +13,11 @@ endif
 COMPOSE_PROJECT_NAME ?= btp-$(BTP_FEED_MODE)
 COMPOSE := BTP_FEED_MODE=$(BTP_FEED_MODE) docker compose -p $(COMPOSE_PROJECT_NAME) \
 	-f deploy/compose/compose.yaml
-# Projects that bind the same localhost ports, so only one runs at a time (btp: v0.1's name).
-PORT_PROJECTS := btp btp-fixtures btp-live btp-smoke
+# Every project binds the same host ports, so only one runs at a time. PORT_PROJECTS lists the
+# compose projects that have a container on one of them, whatever their name.
+STACK_PORTS := 5432 8000 8080 9094
+PORT_PROJECTS = $$(for p in $(STACK_PORTS); do \
+	docker ps --filter publish=$$p --format '{{.Label "com.docker.compose.project"}}'; done | sort -u)
 # Containers that run once and exit 0 (make up checks their exit codes).
 ONESHOTS := kafka-init schedule-import metrics-jobs-apply
 
@@ -48,11 +51,9 @@ typecheck: ## mypy (strict) on every package
 # --wait returns while the one-shot containers are still running; `wait` blocks until they
 # finish and fails if one failed (topics created, schedule imported and active).
 up: ## Start the stack (fixtures; BTP_FEED_MODE=live for live); waits until healthy and imported
-	@# `docker compose ls` lists running projects only.
-	@for p in $$(docker compose ls -q); do \
-	  case " $(PORT_PROJECTS) " in *" $$p "*) [ "$$p" = "$(COMPOSE_PROJECT_NAME)" ] || { \
-	    echo "make up: compose project $$p is running and uses the same ports."; \
-	    echo "Stop it first: docker compose -p $$p down"; exit 1; } ;; esac; \
+	@for p in $(PORT_PROJECTS); do [ "$$p" = "$(COMPOSE_PROJECT_NAME)" ] || { \
+	  echo "make up: compose project $$p is running and uses the same ports."; \
+	  echo "Stop it first: docker compose -p $$p down"; exit 1; }; \
 	done
 	$(COMPOSE) up -d --build
 	@# `up --wait` fails when a one-shot exits, even with 0, so check their exit codes here
@@ -65,6 +66,11 @@ up: ## Start the stack (fixtures; BTP_FEED_MODE=live for live); waits until heal
 
 down: ## Stop this mode's stack (keeps data; add -v by hand to reset volumes)
 	$(COMPOSE) down
+	@# A plain `make down` after `BTP_FEED_MODE=live make up` would leave live polling the feed.
+	@for p in $(PORT_PROJECTS); do \
+	  echo "make down: compose project $$p is still running. Stop it with:"; \
+	  echo "  docker compose -p $$p down   (btp-live: BTP_FEED_MODE=live make down)"; \
+	done
 
 logs: ## Follow the logs of all containers
 	$(COMPOSE) logs -f

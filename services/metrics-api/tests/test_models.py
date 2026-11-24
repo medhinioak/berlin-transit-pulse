@@ -125,6 +125,7 @@ def test_schedule_missing_trips_names_version_and_fix() -> None:
     assert "'rush-hour'" in reason
     assert "make down && make up" in reason
     assert "make fixtures" in reason
+    assert "btp-schedule activate" in reason
 
 
 def test_schedule_without_active_version() -> None:

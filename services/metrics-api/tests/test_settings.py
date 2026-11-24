@@ -1,10 +1,12 @@
 """Unit tests: the reference time the API pins for the views (ADR-0019)."""
 
+import json
 from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
 
+from btp_common.fixtures import fixtures_dir
 from btp_metrics_api.settings import ApiSettings, fixture_trip_ids, reference_time
 
 
@@ -37,7 +39,8 @@ def test_explicit_as_of_wins(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_fixture_trip_ids_of_committed_set() -> None:
-    """The committed rush-hour set has 172 distinct trips (fixtures/vbb-rt/rush-hour)."""
+    """The trip_ids of the committed rush-hour set: as many as its manifest records."""
+    manifest = json.loads((fixtures_dir() / "vbb-rt" / "rush-hour" / "manifest.json").read_text())
     ids = fixture_trip_ids("rush-hour")
-    assert len(ids) == 172
+    assert len(ids) == manifest["trips"]
     assert all(ids)

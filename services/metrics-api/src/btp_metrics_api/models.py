@@ -94,6 +94,9 @@ def schedule_mismatch(
     active = f"active schedule version {version_id}" if version_id else "no active schedule"
     return (
         f"{active} has {found} of the {expected} trips of fixture set {fixture_set!r}. "
-        "Fixtures mode needs the mini GTFS: run 'make down && make up' (compose project "
-        "btp-fixtures), or re-record the fixtures with 'make fixtures' (fixtures/README.md)"
+        "Fixtures mode needs the mini GTFS active: 'make down && make up' imports it in project "
+        "btp-fixtures. If it is already there but retired, run 'btp-schedule activate <id>' "
+        "(ids: 'btp-schedule status') or reset this project's volumes "
+        "(deploy/compose/README.md#resetting). If the mini GTFS is outdated, re-record the "
+        "fixtures ('make fixtures')"
     )

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from btp_metrics_api import app as app_module
 from btp_metrics_api import queries
 from btp_metrics_api.models import ATTRIBUTION
-from btp_metrics_api.settings import ApiSettings
+from btp_metrics_api.settings import ApiSettings, fixture_trip_ids
 
 
 class FakePool:
@@ -137,7 +137,8 @@ def test_health_fixtures_schedule_mismatch(monkeypatch: pytest.MonkeyPatch) -> N
     response = c.get("/health")
     assert response.status_code == 503
     reason = response.json()["reason"]
-    assert reason.startswith("active schedule version 8255349c4cd3 has 16 of the 172 trips")
+    expected = len(fixture_trip_ids("rush-hour"))
+    assert reason.startswith(f"active schedule version 8255349c4cd3 has 16 of the {expected} trips")
 
 
 def test_health_fixtures_schedule_ok(monkeypatch: pytest.MonkeyPatch) -> None:

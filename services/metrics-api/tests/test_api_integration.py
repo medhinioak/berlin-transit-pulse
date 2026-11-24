@@ -144,7 +144,8 @@ def test_wrong_active_schedule_fails_clearly() -> None:
             assert conn.execute("SELECT count(*) FROM marts.v_now_by_mode").fetchone() == (0,)
             problem = schedule_problem(conn)
     assert problem is not None
-    assert problem.startswith("active schedule version test-wrong has 0 of the 172 trips")
+    expected = len(fixture_trip_ids(FIXTURE_SET))
+    assert problem.startswith(f"active schedule version test-wrong has 0 of the {expected} trips")
     assert "make down && make up" in problem
 
 
@@ -152,8 +153,12 @@ def test_wrong_active_schedule_fails_clearly() -> None:
 def test_fixture_data_served_after_timetable_change(monkeypatch: pytest.MonkeyPatch) -> None:
     """With the clock after 2026-12-13 and BTP_AS_OF unset, fixture data is still served.
 
-    "Now" is pinned to the recording time (ADR-0019), not the clock. Runs the app in-process
-    against the stack's database, with the app's clock faked.
+    Runs the app in-process against the stack's database, with the app's clock faked to
+    2026-12-20: the Python side derives "now" from the recording, not the clock. The database
+    clock can't be faked, but it is already days past the recording (2026-11-18), outside the
+    views' today/yesterday window, so a view reading now() instead of btp.as_of (ADR-0019)
+    fails here today. 13 Dec matters only for the schedule, which is the mini GTFS: the
+    schedule tests import it with today after the change.
     """
 
     class After(datetime):

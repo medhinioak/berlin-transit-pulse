@@ -1,7 +1,8 @@
 # schedule
 
 Imports VBB's static GTFS into the Postgres schema `schedule` as versions, and activates one
-of them. Other services read only the `schedule.v_*` views, which show the active version.
+of them. Other services read only the `schedule.v_*` views, which show the active version
+(one per table, plus `v_active_version`: its id, feed dates and activation time).
 
 Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC-BY 4.0
 (<https://creativecommons.org/licenses/by/4.0/>), from <https://www.vbb.de/vbbgtfs>.
