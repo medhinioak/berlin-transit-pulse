@@ -8,14 +8,18 @@
 #
 #   timestamp,container,mem_bytes,mem_limit_bytes,cpu_percent
 #
-# The header is written only when the file is new, so a restarted run appends. On Ctrl-C or
-# SIGTERM it writes OUTPUT_CSV minus .csv plus .summary.txt: each container's cgroup
-# memory.peak, how often it hit its limit (memory.events max) and its OOMKilled flag.
-# Summarise with scripts/summarise_memory.py.
+# The header is written only when the file is new, so a restarted run appends. Readings of a
+# container that is restarting (0B or "--") are skipped. On Ctrl-C or SIGTERM it writes
+# OUTPUT_CSV minus .csv plus .summary.txt: per container the cgroup's memory.peak, its
+# memory.events max (reclaim at the limit) and oom_kill counts, the restart count and the
+# OOMKilled flag. Summarise with scripts/summarise_memory.py.
+#
+# A restart starts a new cgroup and clears OOMKilled, so memory.peak and the event counts cover
+# only the current run of the container; a restart count above zero means look at the logs.
 #
 # mem_bytes is what `docker stats` reports: on cgroup v2 that is memory.current minus
 # inactive page cache. memory.peak counts the page cache too, which grows into a free limit
-# (Postgres): a peak near the limit with zero limit hits is cache, not pressure.
+# (Postgres), so a peak near the limit is not pressure by itself; oom_kill counts are.
 set -euo pipefail
 
 usage() {
@@ -44,7 +48,8 @@ containers() {
 }
 
 # One `docker stats` reading of the running containers, as CSV rows with a UTC timestamp.
-# MemUsage looks like "45.3MiB / 256MiB"; awk turns both sides into bytes.
+# MemUsage looks like "45.3MiB / 256MiB"; awk turns both sides into bytes and skips readings
+# that aren't measurements (a restarting container shows "0B / 0B" or "--").
 sample() {
   local ids
   ids=$(containers)
@@ -68,29 +73,39 @@ sample() {
       }
       {
         split($2, mem, "/")
+        used = bytes(mem[1]); limit = bytes(mem[2])
         cpu = $3; sub(/%$/, "", cpu)
-        printf "%s,%s,%.0f,%.0f,%s\n", ts, $1, bytes(mem[1]), bytes(mem[2]), cpu
+        if (used <= 0 || limit <= 0 || cpu !~ /^[0-9]+(\.[0-9]+)?$/) {
+          print "measure: skipped reading of " $1 ": " $2 " " $3 > "/dev/stderr"
+          next
+        }
+        printf "%s,%s,%.0f,%.0f,%s\n", ts, $1, used, limit, cpu
       }'
 }
 
-# Per container: memory.peak and the `max` count of memory.events from its cgroup (needs
-# `cat` in the image and a running container), and the OOMKilled flag.
+# Per container: memory.peak and the max and oom_kill counts of memory.events from its cgroup
+# (needs `cat` in the image and a running container), the restart count and OOMKilled.
+# Best effort: a container that vanishes meanwhile is left out, the rest is still written.
 write_summary() {
-  local id name state oom peak hits
+  set +e +o pipefail
+  local id name state restarts oom peak events hits kills
   {
     echo "# $(date -u +%Y-%m-%dT%H:%M:%SZ) project=$project"
-    echo "# container memory_peak_bytes limit_hits oom_killed note"
+    echo "# container memory_peak_bytes limit_hits oom_kills restarts oom_killed note"
     for id in $(containers all); do
-      read -r name state oom < <(docker inspect -f '{{.Name}} {{.State.Status}} {{.State.OOMKilled}}' "$id")
+      read -r name state restarts oom < <(docker inspect \
+        -f '{{.Name}} {{.State.Status}} {{.RestartCount}} {{.State.OOMKilled}}' "$id" 2>/dev/null) ||
+        continue
       name=${name#/}
       if [ "$state" != running ]; then
-        echo "$name - - $oom skipped: $state"
+        echo "$name - - - $restarts $oom skipped: $state"
       elif peak=$(docker exec "$id" cat /sys/fs/cgroup/memory.peak 2>/dev/null); then
-        hits=$(docker exec "$id" cat /sys/fs/cgroup/memory.events 2>/dev/null |
-          awk '$1 == "max" { print $2 }')
-        echo "$name $peak ${hits:--} $oom"
+        events=$(docker exec "$id" cat /sys/fs/cgroup/memory.events 2>/dev/null)
+        hits=$(awk '$1 == "max" { print $2 }' <<<"$events")
+        kills=$(awk '$1 == "oom_kill" { print $2 }' <<<"$events")
+        echo "$name $peak ${hits:--} ${kills:--} $restarts $oom"
       else
-        echo "$name - - $oom skipped: cannot read memory.peak (no cat, or kernel < 5.19)"
+        echo "$name - - - $restarts $oom skipped: cannot read memory.peak (no cat, or kernel < 5.19)"
       fi
     done
   } >"$summary"
@@ -99,7 +114,8 @@ write_summary() {
 
 stop() {
   trap - INT TERM
-  [ -n "${sleeper:-}" ] && kill "$sleeper" 2>/dev/null || true
+  # Reap the interrupted sleep, or bash reports it as "Terminated" during the summary.
+  [ -n "${sleeper:-}" ] && { kill "$sleeper"; wait "$sleeper"; } 2>/dev/null || true
   write_summary
   exit 0
 }

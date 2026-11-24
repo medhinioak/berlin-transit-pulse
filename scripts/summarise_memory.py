@@ -3,8 +3,10 @@
     uv run python scripts/summarise_memory.py run.csv [--summary run.summary.txt]
 
 Per container: samples, limit, median, p95 and peak of the memory readings, the time of the
-first peak (UTC and Berlin) and the mean CPU. With --summary, also the cgroup memory.peak, how
-often the container hit its limit, and the OOMKilled flag recorded when the measurement stopped.
+first peak (UTC and Berlin) and the mean CPU. With --summary, also what was recorded when the
+measurement stopped: the cgroup memory.peak, reclaims at the limit, OOM kills, restarts and the
+OOMKilled flag. Rows that aren't readings (cut off, or from a restarting container) are skipped
+and counted on stderr.
 """
 
 import argparse
@@ -51,27 +53,43 @@ class Final:
 
     memory_peak_bytes: int | None
     limit_hits: int | None
+    oom_kills: int | None
+    restarts: int
     oom_killed: str
     note: str
 
 
-def read_samples(path: Path) -> dict[str, list[Sample]]:
-    """Read the CSV into readings per container, skipping header rows (a restart appends one)."""
+def _parse_row(row: list[str]) -> tuple[str, Sample] | None:
+    """Return (container, reading) for a valid row, or None for a cut-off or non-numeric one."""
+    if len(row) != len(HEADER):
+        return None
+    ts, name, mem, limit, cpu = row
+    try:
+        sample = Sample(datetime.fromisoformat(ts), int(mem), int(limit), float(cpu))
+    except ValueError:
+        return None
+    if sample.mem_bytes <= 0 or sample.limit_bytes <= 0:
+        return None
+    return name, sample
+
+
+def read_samples(path: Path) -> tuple[dict[str, list[Sample]], int]:
+    """Read the CSV into readings per container and count the rows that aren't readings.
+
+    Header rows are skipped silently: a restarted measurement appends one.
+    """
     by_container: dict[str, list[Sample]] = defaultdict(list)
+    skipped = 0
     with path.open(newline="") as f:
         for row in csv.reader(f):
             if not row or row == HEADER:
                 continue
-            ts, name, mem, limit, cpu = row
-            by_container[name].append(
-                Sample(
-                    at=datetime.fromisoformat(ts),
-                    mem_bytes=int(mem),
-                    limit_bytes=int(limit),
-                    cpu_percent=float(cpu),
-                )
-            )
-    return dict(by_container)
+            parsed = _parse_row(row)
+            if parsed is None:
+                skipped += 1
+                continue
+            by_container[parsed[0]].append(parsed[1])
+    return dict(by_container), skipped
 
 
 def summarise(samples: list[Sample]) -> Stats:
@@ -81,7 +99,7 @@ def summarise(samples: list[Sample]) -> Stats:
     peak = max(samples, key=lambda s: s.mem_bytes)  # max keeps the first of equal values
     return Stats(
         samples=len(samples),
-        limit_bytes=samples[-1].limit_bytes,
+        limit_bytes=max(s.limit_bytes for s in samples),
         median_bytes=statistics.median(mem),
         p95_bytes=p95,
         peak_bytes=peak.mem_bytes,
@@ -91,19 +109,31 @@ def summarise(samples: list[Sample]) -> Stats:
 
 
 def read_summary(path: Path) -> dict[str, Final]:
-    """Parse the summary file: `name peak|- hits|- oom_killed [note…]`; # lines are comments."""
+    """Parse `name peak hits kills restarts oom_killed [note…]` lines (- = unknown, # = comment)."""
     finals: dict[str, Final] = {}
     for line in path.read_text().splitlines():
         if not line.strip() or line.startswith("#"):
             continue
-        name, peak, hits, oom, *note = line.split()
+        name, peak, hits, kills, restarts, oom, *note = line.split()
         finals[name] = Final(
-            memory_peak_bytes=None if peak == "-" else int(peak),
-            limit_hits=None if hits == "-" else int(hits),
+            memory_peak_bytes=_int_or_none(peak),
+            limit_hits=_int_or_none(hits),
+            oom_kills=_int_or_none(kills),
+            restarts=int(restarts),
             oom_killed=oom,
             note=" ".join(note),
         )
     return finals
+
+
+def _int_or_none(value: str) -> int | None:
+    """Parse an integer field of the summary file, where - means unknown."""
+    return None if value == "-" else int(value)
+
+
+def _count(value: int | None) -> str:
+    """Format a count, or a dash when it is unknown."""
+    return "–" if value is None else str(value)
 
 
 def _mib(value: float | None) -> str:
@@ -112,32 +142,43 @@ def _mib(value: float | None) -> str:
 
 
 def render_markdown(stats: dict[str, Stats], finals: dict[str, Final] | None = None) -> str:
-    """Render one table row per container, sorted by peak memory, largest first."""
+    """Render one row per container, by peak memory; containers only in finals come last."""
     head = ["Container", "Samples", "Limit MiB", "Median MiB", "p95 MiB", "Peak MiB"]
     head += ["Peak at (UTC)", "Peak at (Berlin)", "Mean CPU %"]
     if finals is not None:
-        head += ["memory.peak MiB", "Limit hits", "OOMKilled"]
+        head += ["memory.peak MiB", "Limit hits", "OOM kills", "Restarts", "OOMKilled"]
     lines = ["| " + " | ".join(head) + " |", "|" + " --- |" * len(head)]
-    for name, s in sorted(stats.items(), key=lambda kv: -kv[1].peak_bytes):
-        cells = [
-            f"`{name}`",
-            str(s.samples),
-            _mib(s.limit_bytes),
-            _mib(s.median_bytes),
-            _mib(s.p95_bytes),
-            _mib(s.peak_bytes),
-            s.peak_at.strftime("%Y-%m-%d %H:%M"),
-            s.peak_at.astimezone(BERLIN).strftime("%H:%M"),
-            f"{s.mean_cpu_percent:.1f}",
-        ]
+    measured = sorted(stats, key=lambda name: -stats[name].peak_bytes)
+    unmeasured = sorted(set(finals or {}) - set(stats))
+    for name in measured + unmeasured:
+        s = stats.get(name)
+        if s is None:
+            cells = [f"`{name}`", "0"] + ["–"] * 7
+        else:
+            cells = [
+                f"`{name}`",
+                str(s.samples),
+                _mib(s.limit_bytes),
+                _mib(s.median_bytes),
+                _mib(s.p95_bytes),
+                _mib(s.peak_bytes),
+                s.peak_at.strftime("%Y-%m-%d %H:%M"),
+                s.peak_at.astimezone(BERLIN).strftime("%Y-%m-%d %H:%M"),
+                f"{s.mean_cpu_percent:.1f}",
+            ]
         if finals is not None:
             final = finals.get(name)
             if final is None:
-                cells += ["–", "–", "not in summary"]
+                cells += ["–", "–", "–", "–", "not in summary"]
             else:
                 peak = _mib(final.memory_peak_bytes) + (f" ({final.note})" if final.note else "")
-                hits = "–" if final.limit_hits is None else str(final.limit_hits)
-                cells += [peak, hits, final.oom_killed]
+                cells += [
+                    peak,
+                    _count(final.limit_hits),
+                    _count(final.oom_kills),
+                    str(final.restarts),
+                    final.oom_killed,
+                ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
@@ -148,7 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("csv", type=Path, help="CSV written by scripts/measure_memory.sh")
     parser.add_argument("--summary", type=Path, help="its .summary.txt file")
     args = parser.parse_args(argv)
-    samples = read_samples(args.csv)
+    samples, skipped = read_samples(args.csv)
+    if skipped:
+        print(f"summarise: skipped {skipped} rows that aren't readings", file=sys.stderr)
     if not samples:
         print(f"summarise: no readings in {args.csv}", file=sys.stderr)
         return 1
