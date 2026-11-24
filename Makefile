@@ -2,7 +2,19 @@
 .PHONY: help install test test-integration lint fmt typecheck up down logs ps kafka-topics psql \
 	fixtures tf-check-stack tf-validate tf-plan
 
-COMPOSE := docker compose -f deploy/compose/compose.yaml
+# Each data mode is its own compose project with its own volumes (#75), so a mode never sees
+# the other's schedule versions: `make up` is btp-fixtures, `BTP_FEED_MODE=live make up` is
+# btp-live. scripts/smoke.sh sets COMPOSE_PROJECT_NAME=btp-smoke, which ?= keeps.
+# The mode goes to compose only, not exported: unit tests read BTP_* settings from the env.
+BTP_FEED_MODE ?= fixtures
+ifeq ($(filter $(BTP_FEED_MODE),fixtures live),)
+$(error BTP_FEED_MODE must be fixtures or live, not '$(BTP_FEED_MODE)')
+endif
+COMPOSE_PROJECT_NAME ?= btp-$(BTP_FEED_MODE)
+COMPOSE := BTP_FEED_MODE=$(BTP_FEED_MODE) docker compose -p $(COMPOSE_PROJECT_NAME) \
+	-f deploy/compose/compose.yaml
+# Projects that bind the same localhost ports, so only one runs at a time (btp: v0.1's name).
+PORT_PROJECTS := btp btp-fixtures btp-live btp-smoke
 # Containers that run once and exit 0 (make up checks their exit codes).
 ONESHOTS := kafka-init schedule-import metrics-jobs-apply
 
@@ -35,7 +47,13 @@ typecheck: ## mypy (strict) on every package
 
 # --wait returns while the one-shot containers are still running; `wait` blocks until they
 # finish and fails if one failed (topics created, schedule imported and active).
-up: ## Start Kafka, Postgres and the services; waits until healthy, topics and schedule exist
+up: ## Start the stack (fixtures; BTP_FEED_MODE=live for live); waits until healthy and imported
+	@# `docker compose ls` lists running projects only.
+	@for p in $$(docker compose ls -q); do \
+	  case " $(PORT_PROJECTS) " in *" $$p "*) [ "$$p" = "$(COMPOSE_PROJECT_NAME)" ] || { \
+	    echo "make up: compose project $$p is running and uses the same ports."; \
+	    echo "Stop it first: docker compose -p $$p down"; exit 1; } ;; esac; \
+	done
 	$(COMPOSE) up -d --build
 	@# `up --wait` fails when a one-shot exits, even with 0, so check their exit codes here
 	@# (`docker wait` works on running and stopped containers) and wait for the rest after.
@@ -45,7 +63,7 @@ up: ## Start Kafka, Postgres and the services; waits until healthy, topics and s
 	done
 	$(COMPOSE) up -d --wait --no-deps $$($(COMPOSE) config --services | grep -vxF $(ONESHOTS:%=-e %))
 
-down: ## Stop the stack (keeps data; add -v by hand to reset volumes)
+down: ## Stop this mode's stack (keeps data; add -v by hand to reset volumes)
 	$(COMPOSE) down
 
 logs: ## Follow the logs of all containers

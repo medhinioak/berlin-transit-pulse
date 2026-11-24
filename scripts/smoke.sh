@@ -17,7 +17,8 @@ done
 
 export BTP_FEED_MODE=fixtures
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-btp-smoke}"
-COMPOSE=(docker compose -f deploy/compose/compose.yaml)
+# make up reads COMPOSE_PROJECT_NAME too (Makefile), so both use the same project.
+COMPOSE=(docker compose -p "$COMPOSE_PROJECT_NAME" -f deploy/compose/compose.yaml)
 API=http://localhost:8000
 WEB=http://localhost:8080
 TIMEOUT_S=180

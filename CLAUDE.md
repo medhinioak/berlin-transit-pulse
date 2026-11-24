@@ -15,8 +15,9 @@ Keep this list true to the Makefile (`make help` lists every target).
 
 - Install: make install (uv sync --all-packages)
 - Start the stack locally: make up (Kafka, Postgres, all services; waits until healthy;
-  offline fixtures replay by default, BTP_FEED_MODE=live for the real feed).
-  Stop / follow logs: make down / make logs
+  offline fixtures replay as compose project btp-fixtures; BTP_FEED_MODE=live make up runs
+  the real feed as btp-live, with its own volumes; only one runs at a time).
+  Stop / follow logs: make down / make logs (each target acts on the project of BTP_FEED_MODE)
 - Inspect the stack: make ps, make kafka-topics, make psql (details: deploy/compose/README.md)
 - Run ingest on its own: BTP_FEED_MODE=fixtures uv run btp-ingest (offline replay; live mode needs
   BTP_FEED_CONTACT and calls the real feed, see Rules). Config: services/ingest/README.md
