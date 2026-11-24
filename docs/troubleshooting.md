@@ -118,6 +118,23 @@ Status is one of: _fixed_, _workaround_ (remove when the upstream fix lands), _o
   marked `failed` and the active version was untouched.
 - **Status:** _fixed_
 
+### Fixtures mode loses most trips after a live GTFS import
+
+- **Seen:** 2026-11-20, while working on #10.
+- **Symptom:** after `make up` imported VBB's newly published static GTFS (version
+  `8255349c4cd3`, valid from 2026-11-20), `/v1/now/by-mode` in fixtures mode showed bus 3
+  instead of 22 running trips, U-Bahn 13 instead of 24, and no tram row. `make
+  test-integration` failed only after its 60 s wait, with no explanation.
+- **Cause:** fixtures and live mode shared one compose project and Postgres volume. The new
+  GTFS dropped trip_ids that the 2026-11-18 fixtures use, and the views only see the active
+  version. ADR-0009 never re-activates a `retired` version, so switching back left the wrong
+  one active. VBB republishes every few weeks, not only at the 13 Dec timetable change.
+- **Fix:** one compose project per mode, `btp-fixtures` and `btp-live`, each with its own
+  volumes (#75). In fixtures mode metrics-api checks that every replayed trip is in the active
+  schedule and answers `/health` with 503 and the fix if not. The integration tests run the
+  same check first and fail in seconds.
+- **Status:** _fixed_
+
 ## Tooling
 
 ### Kafka integration test fails at random: producer refused on `::1`

@@ -217,3 +217,20 @@ def test_failed_import_leaves_active_version(conn: psycopg.Connection[Any], tmp_
     assert _active(conn) == good.version_id
     with pytest.raises(ValueError, match="failed"):
         activate(conn, bad_id[0])
+
+
+@pytest.mark.parametrize("today", [date(2026, 12, 13), date(2026, 12, 14), date(2027, 6, 1)])
+def test_mini_gtfs_imports_after_timetable_change(
+    conn: psycopg.Connection[Any], tmp_path: Path, today: date
+) -> None:
+    """Fixtures mode keeps importing after VBB's 2026-12-13 timetable change (#75).
+
+    The mini GTFS carries its own dates (to 2027-12-11), so the real calendar doesn't matter.
+    """
+    agency = (mini_gtfs_dir() / "agency.txt").read_text(encoding="utf-8")
+    changed = agency.replace("S-Bahn Berlin GmbH", f"S-Bahn Berlin GmbH ({today})")
+    result = import_source(
+        conn, _zip(tmp_path / "mini.zip", replace={"agency.txt": changed}), "test:mini", today=today
+    )
+    assert result.imported
+    assert _status(conn, result.version_id) == "ready"
