@@ -127,7 +127,9 @@ systemctl status btp-schedule-refresh                 # result of the last run
 ```
 
 Missed runs (the server was off) run at the next boot. A failed run is retried at the next
-scheduled time. Until monitoring exists (M5), check the journal.
+scheduled time. While a deploy runs, or after one failed before recording itself, a job logs
+"deployed release is … not running" and exits 1: the checkout and the deployed images differ.
+The next deploy or scheduled run puts it right. Until monitoring exists (M5), check the journal.
 
 ## Database
 

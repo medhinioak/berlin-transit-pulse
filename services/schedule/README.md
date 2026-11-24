@@ -146,20 +146,25 @@ The decision and its alternatives are recorded in
 ADR-0009.
 
 - **Staging**: a feed starting up to 21 days after today imports as `ready` with
-  `activate_on` = its start date. Further ahead, it fails with the date it can be staged
-  from. Any version whose start is today or later gets `activate_on`; one that started earlier
+  `activate_on` = its start date. A feed starting further ahead is refused before loading:
+  only feed_info, calendar and calendar_dates are read. The command logs the date it can be
+  staged from, writes no version row, and exits 0. The next daily refresh checks again. Any version whose start is today or later gets `activate_on`; one that started earlier
   (a republished timetable) doesn't, and is activated at once.
 - **Activation on the eve**: `activate-due` (timer at 23:40 Europe/Berlin) activates the staged
   version whose `activate_on` is tomorrow, so it is active before its first service day starts
-  at midnight. It also catches up with one whose day has passed; if several are due, the
-  latest start wins. `refresh` catches up too, but never activates a version for tomorrow.
+  at midnight. It also catches up with one whose day has passed. If several are due, the
+  latest start wins, and for the same start the newest import. `refresh` catches up too, but
+  never activates a version for tomorrow.
+- **Superseded**: activating a version clears `activate_on` on the other staged versions
+  starting no later than it (or today), so they are never activated over it afterwards.
 - **History and the version of a service day**:
   - `version_activations` has one row per activation: `activated_at`, `effective_from` and
     `deactivated_at`.
   - Service day *d* belongs to the latest activation in effect at *d* 00:00 Europe/Berlin
     (`v_version_periods`, `version_for_service_date(d)`).
   - A staged version activated late, or imported on its first morning, counts from 00:00 on
-    its `activate_on`. Days before the first activation belong to the earliest version.
+    its `activate_on`. `effective_from` is never earlier than an earlier activation's.
+  - Days before the first activation belong to the earliest version.
   - Join realtime data with
     `ON t.trip_id = x.trip_id AND x.service_date BETWEEN t.first_service_date AND t.last_service_date`.
 - **`refresh`**, in order:
@@ -173,24 +178,25 @@ ADR-0009.
 - **Pruning** keeps:
   - the active version;
   - the most recently deactivated `retired` one (late updates around a swap);
+  - the versions serving yesterday's and today's service days (trips past midnight);
   - every `ready` one;
   - `importing` ones;
   - `failed` ones younger than 7 days (they hold no rows; their row says why).
 
   The rest is deleted in committed batches of 50,000 rows, then `VACUUM (ANALYZE)`. The log
   line `pruned version … in … s` gives the duration.
-- **Backup**: a newly imported zip (from `import` or `refresh`) is copied to
+- **Backup**: an imported zip (from `import` or `refresh`) is copied to
   `s3://$BTP_RAW_BUCKET/backups/gtfs/<version_id>.zip` with `If-None-Match: *`, as the
-  instance role requires. A failure is logged and doesn't fail the import. Folders (fixtures)
-  aren't backed up.
+  instance role requires. A failure is logged, doesn't fail the import, and is retried on the
+  next run until the marker `$BTP_SCHEDULE_CACHE_DIR/backed-up/<version_id>` records success.
+  Folders (fixtures) aren't backed up.
 
 ## Known limitations
 
 - **Fixture expiry:** the mini fixture's calendar ends on 2027-12-11. After that,
   `BTP_FEED_MODE=fixtures` imports fail validation until the fixtures are re-recorded.
 - **Unused ready versions:** a `ready` version that is never activated (imported without
-  `--activate`, or a staged one superseded by a later start) is never pruned. Delete it by
-  hand.
+  `--activate`, or a superseded staged one) is never pruned. Delete it by hand.
 - **Rollbacks and history:** `v_*_by_service_date` follows the activation history. After
   activating a version by hand and rolling back, the service days in between keep the
   rolled-back version.

@@ -1,7 +1,9 @@
 """Validation rules a version must pass before it can be activated."""
 
 from datetime import date
+from pathlib import Path
 
+from btp_schedule.gtfs import GtfsSource, feed_start_date
 from btp_schedule.importer import validation_errors
 
 GOOD_COUNTS = {"routes": 1, "trips": 1, "stops": 1, "stop_times": 1}
@@ -45,3 +47,17 @@ def test_feed_starting_within_21_days_is_staged() -> None:
         "feed starts on 2026-12-13, more than 21 days after 2026-11-21; "
         "it can be staged from 2026-11-22"
     ]
+
+
+def test_feed_start_date_without_loading(tmp_path: Path) -> None:
+    """The start comes from feed_info if set, else calendar and calendar_dates."""
+    (tmp_path / "calendar.txt").write_text(
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
+        "1,1,1,1,1,1,1,1,20261213,20271211\n"
+    )
+    (tmp_path / "calendar_dates.txt").write_text("service_id,date,exception_type\n1,20261220,1\n")
+    source = GtfsSource(tmp_path)
+    assert feed_start_date(source, source.names()) == date(2026, 12, 13)
+    (tmp_path / "feed_info.txt").write_text("feed_publisher_name,feed_start_date\nVBB,20261201\n")
+    assert feed_start_date(source, source.names()) == date(2026, 12, 1)
+    assert feed_start_date(source, set()) is None

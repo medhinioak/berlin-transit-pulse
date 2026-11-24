@@ -111,7 +111,30 @@ mapfile -t long_running < <("${COMPOSE[@]}" config --services | grep -vxF "${ONE
 log "waiting for ${long_running[*]}"
 "${COMPOSE[@]}" up -d --wait --wait-timeout 300 --no-build --no-deps "${long_running[@]}"
 
-# --- 3. Batch jobs: systemd units and timers (ADR-0011) ---
+# --- 3. Record the release and prune older images ---
+# A redeploy of the same SHA keeps the release before it as the previous one.
+current=$(cat "$SHA_FILE" 2>/dev/null || true)
+if [ -n "$current" ] && [ "$current" != "$sha" ]; then
+  echo "$current" >"$PREV_FILE"
+fi
+echo "$sha" >"$SHA_FILE"
+prev=$(cat "$PREV_FILE" 2>/dev/null || true)
+log "deployed $sha (previous: ${prev:-none})"
+
+# Keep this release's images and the previous one's: a rollback to it then only checks the
+# manifests (pull_policy: always) and downloads no layers.
+docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=${IMAGE_PREFIX}*" |
+  while read -r image; do
+    tag=${image##*:}
+    if [ "$tag" != "$sha" ] && [ "$tag" != "$prev" ]; then
+      docker image rm "$image" >/dev/null || log "could not remove $image (still in use?)"
+    fi
+  done
+docker image prune -f >/dev/null
+
+# --- 4. Batch jobs: systemd units and timers (ADR-0011) ---
+# After deployed_sha is written: run-job.sh runs that release, and refuses to run while the
+# checkout differs from it (a deploy in progress or one that failed before this point).
 # Installs deploy/release/systemd/btp-* into /etc/systemd/system, enables every timer, and
 # removes units an earlier deploy installed whose files are gone. Only units listed in
 # UNITS_FILE are ever removed: other btp-* units on the host (e.g. measurements) stay.
@@ -146,27 +169,6 @@ for unit in "${units[@]}"; do
   fi
 done
 systemctl list-timers 'btp-*' --no-pager
-
-# --- 4. Record the release and prune older images ---
-# A redeploy of the same SHA keeps the release before it as the previous one.
-current=$(cat "$SHA_FILE" 2>/dev/null || true)
-if [ -n "$current" ] && [ "$current" != "$sha" ]; then
-  echo "$current" >"$PREV_FILE"
-fi
-echo "$sha" >"$SHA_FILE"
-prev=$(cat "$PREV_FILE" 2>/dev/null || true)
-log "deployed $sha (previous: ${prev:-none})"
-
-# Keep this release's images and the previous one's: a rollback to it then only checks the
-# manifests (pull_policy: always) and downloads no layers.
-docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=${IMAGE_PREFIX}*" |
-  while read -r image; do
-    tag=${image##*:}
-    if [ "$tag" != "$sha" ] && [ "$tag" != "$prev" ]; then
-      docker image rm "$image" >/dev/null || log "could not remove $image (still in use?)"
-    fi
-  done
-docker image prune -f >/dev/null
 
 "${COMPOSE[@]}" ps -a
 log "OK"

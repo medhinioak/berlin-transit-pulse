@@ -4,7 +4,9 @@
 - Date: 2026-11-24
 - Decider: Maintainer (@medhinioak)
 - Review: decisions taken in issue #24; late activation and days before the first activation
-  decided with Claude Code while planning #24, 2026-11-24
+  decided with Claude Code while planning #24; superseded staged versions, ordered
+  activations, versions in use and the early refusal added after `/code-review` on PR #93,
+  2026-11-24
 - Extends [ADR-0009](0009-version-static-gtfs-and-swap-atomically.md)
 
 ## Context
@@ -22,15 +24,24 @@ its consequences block the annual timetable change on 2026-12-13, when every tri
 
 - **Staging:**
   - A feed whose start date is up to 21 days after today validates as before and becomes
-    `ready` with `activate_on = feed_start_date`. Further ahead, it is `failed` with the reason.
+    `ready` with `activate_on = feed_start_date`.
+  - A feed starting further ahead is refused before loading: the start date is read from
+    feed_info, calendar and calendar_dates only. No version row is written, and the command
+    exits 0 with a warning. Each daily refresh checks again until the window opens, without
+    loading 5.7M stop_times only to roll them back.
   - A version whose start is today or later gets `activate_on`. One that started in the past
     (a republished timetable) doesn't.
   - `import --activate` and `refresh` activate a version immediately unless its `activate_on`
     is after today.
 - **Activation on the eve:** `btp-schedule activate-due` runs at 23:40 Europe/Berlin and
   activates the staged version whose `activate_on` is tomorrow, or one whose day has passed
-  (catch-up). If several are due, the latest start wins. The morning refresh also catches up,
-  but never activates a version for tomorrow.
+  (catch-up). If several are due, the latest start wins, and of those with the same start
+  (a corrected republish) the newest import. The morning refresh also catches up, but never
+  activates a version for tomorrow.
+- **Superseded staged versions:** an activation clears `activate_on` on every other staged
+  version starting on or before the activated one's start (or today, for a version without
+  `activate_on`). This stops a passed-over or overdue staged version from being activated
+  later over the newer timetable. Versions starting later stay staged.
 - **Activation history:** every activation is a row in `schedule.version_activations`
   (`activated_at`, `effective_from`, `deactivated_at`), written in the same transaction as the
   status change. The table has no foreign key, so the history survives pruning.
@@ -38,6 +49,8 @@ its consequences block the annual timetable change on 2026-12-13, when every tri
   - Exception: the first activation of a version with `activate_on` uses
     `min(activated_at, activate_on 00:00 Europe/Berlin)`. So a staged version activated late
     (catch-up, or imported by hand on its first morning) still applies to its first day.
+  - `effective_from` is never earlier than the latest one so far. Activations stay in order,
+    so a backdated one can't hand later days back to a version activated before it.
 - **Version per service day:**
   - Service day *d* belongs to the latest activation (by `effective_from`) in effect at *d*
     00:00 Europe/Berlin.
@@ -50,14 +63,20 @@ its consequences block the annual timetable change on 2026-12-13, when every tri
     views join the tables to those periods.
   - The `v_*` views of the active version stay for "now" queries.
 - **Pruning:**
-  - Each refresh keeps the active version, the most recently deactivated `retired` one (late
-    updates around a swap), every `ready` one, `importing` ones, and `failed` ones younger than
-    7 days. Failed versions hold no rows; their `versions` row says why they failed.
+  - Each refresh keeps:
+    - the active version;
+    - the most recently deactivated `retired` one (late updates around a swap);
+    - the versions serving yesterday's and today's service days, since trips run past
+      midnight;
+    - every `ready` one and `importing` ones;
+    - `failed` ones younger than 7 days. They hold no rows; their `versions` row says why
+      they failed.
   - It deletes the rest by `version_id`, in batches of 50,000 rows per statement, each batch
     committed. Then it runs `VACUUM (ANALYZE)`, not `FULL`: the next import reuses the space.
-- **Backup:** each newly imported zip is copied to `s3://<data bucket>/backups/gtfs/<version_id>.zip`
+- **Backup:** each imported zip is copied to `s3://<data bucket>/backups/gtfs/<version_id>.zip`
   with `If-None-Match: *`, as the instance role requires. A failed backup is logged and doesn't
-  fail the import.
+  fail the import. It is retried on the next import or refresh of the same zip, until a
+  marker in the cache directory records success.
 
 ## Alternatives considered
 

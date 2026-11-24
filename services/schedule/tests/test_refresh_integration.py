@@ -14,7 +14,13 @@ import psycopg
 import pytest
 
 from btp_schedule.cli import main
-from btp_schedule.importer import ImportFailed, activate, apply_schema, import_source
+from btp_schedule.importer import (
+    ImportFailed,
+    NotStageableYet,
+    activate,
+    apply_schema,
+    import_source,
+)
 from btp_schedule.lifecycle import BERLIN
 from btp_schedule.refresh import activate_due, prune
 
@@ -93,9 +99,45 @@ def test_future_feed_is_staged(
 def test_feed_too_far_ahead_fails(
     conn: Conn, make_zip: ZipMaker, calendar_between: Calendar, tmp_path: Path
 ) -> None:
-    """22 days ahead is failed with the reason."""
-    with pytest.raises(ImportFailed, match="more than 21 days"):
+    """22 days ahead is refused with the reason, before loading: no version row is written."""
+    versions = _one(conn, "SELECT count(*) FROM schedule.versions")
+    with pytest.raises(NotStageableYet, match="can be staged from 2030-11-22"):
         _version(conn, make_zip, calendar_between, tmp_path, SWAP, SWAP - timedelta(days=22))
+    assert _one(conn, "SELECT count(*) FROM schedule.versions") == versions
+
+
+def test_passed_over_staged_version_never_comes_back(
+    conn: Conn, make_zip: ZipMaker, calendar_between: Calendar, tmp_path: Path
+) -> None:
+    """Two staged, caught up late: the newer wins, and the older is not activated next night."""
+    early = SWAP - timedelta(days=12)
+    older = _version(conn, make_zip, calendar_between, tmp_path, early, early - timedelta(days=5))
+    newer = _version(conn, make_zip, calendar_between, tmp_path, SWAP, SWAP - timedelta(days=5))
+    late = SWAP + timedelta(days=1)
+    assert activate_due(conn, late, at=_at(late, 23, 40)) == newer
+    assert (
+        _one(conn, "SELECT activate_on FROM schedule.versions WHERE version_id = %s", older) is None
+    )
+    nxt = late + timedelta(days=1)
+    assert activate_due(conn, nxt, at=_at(nxt, 23, 40)) is None
+    assert activate_due(conn, nxt, lead_days=0, at=_at(nxt, 3, 30)) is None
+    assert _status(conn, newer) == "active"
+
+
+def test_direct_activation_supersedes_an_overdue_staged_version(
+    conn: Conn, make_zip: ZipMaker, calendar_between: Calendar, tmp_path: Path
+) -> None:
+    """A republish activated at once after a missed eve wins over the overdue staged version."""
+    staged = _version(conn, make_zip, calendar_between, tmp_path, SWAP, SWAP - timedelta(days=5))
+    later = SWAP + timedelta(days=2)
+    republish = _version(
+        conn, make_zip, calendar_between, tmp_path, SWAP - timedelta(days=30), later
+    )
+    activate(conn, republish, at=_at(later, 3, 30))  # as the refresh's import does that morning
+    assert _status(conn, republish) == "active"
+    # The refresh's catch-up right after must not swap the staged version in.
+    assert activate_due(conn, later, lead_days=0) is None
+    assert _status(conn, staged) == "ready"
 
 
 def test_activate_due_on_the_eve_and_late(
@@ -243,12 +285,40 @@ def test_prune_keeps_active_previous_and_staged(
         (failed,),
     )
 
-    assert prune(conn) == sorted([oldest, older, failed])
+    assert prune(conn, today) == sorted([oldest, older, failed])
     for version in (oldest, older, failed):
         assert _status(conn, version) is None
     assert _one(conn, "SELECT count(*) FROM schedule.stop_times WHERE version_id = %s", older) == 0
     assert [_status(conn, v) for v in (stack, current, staged)] == ["active", "retired", "ready"]
-    assert prune(conn) == []
+    assert prune(conn, today) == []
+
+
+def test_prune_keeps_the_versions_of_yesterday_and_today(
+    conn: Conn, make_zip: ZipMaker, calendar_between: Calendar, tmp_path: Path
+) -> None:
+    """Swaps on two mornings in a row: the version of yesterday's trips is not deleted."""
+    others = _one(conn, "SELECT count(*) FROM schedule.versions WHERE status <> 'active'")
+    if others:
+        pytest.skip("the dev stack has non-active versions that prune would delete")
+    stack = _one(conn, "SELECT version_id FROM schedule.v_active_version")
+
+    day = SWAP + timedelta(days=30)
+    a, b, c = (
+        _version(conn, make_zip, calendar_between, tmp_path, day - timedelta(days=n), day)
+        for n in (60, 50, 40)
+    )
+    activate(conn, a, at=_at(day - timedelta(days=3), 12))  # serves day-2 and day-1
+    activate(conn, b, at=_at(day - timedelta(days=1), 3, 30))  # serves day
+    activate(conn, c, at=_at(day, 3, 30))  # serves day+1 on
+    # The stack's version last, so it is active again and c is the previous one.
+    activate(conn, stack, at=_at(day + timedelta(days=5), 12))
+
+    # On `day`, a serves yesterday's service day and b today's: both stay.
+    assert prune(conn, day) == []
+    assert [_status(conn, v) for v in (a, b, c)] == ["retired"] * 3
+    # Ten days on, neither is in use: only the previous one (c) stays.
+    assert prune(conn, day + timedelta(days=10)) == sorted([a, b])
+    assert _status(conn, c) == "retired"
 
 
 def test_failed_refresh_leaves_the_active_version(

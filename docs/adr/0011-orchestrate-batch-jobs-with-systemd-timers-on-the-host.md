@@ -28,11 +28,16 @@ Each job is a systemd service plus a timer on the host, versioned in `deploy/rel
   `/opt/btp/installed_units`, so other `btp-*` units on the host are left alone);
 - runs `daemon-reload` and `enable --now` on every timer.
 
+The units are installed after the deploy has recorded `/opt/btp/deployed_sha`.
+
 The service is `Type=oneshot` and calls `deploy/release/run-job.sh <name> <compose service>
 <command…>`. That script:
 
 - runs `docker compose -p btp-live … run --rm --no-deps --pull never` with the deployed
   release's image (`/opt/btp/deployed_sha`) and the rendered env file;
+- refuses to run, with exit 1, while the checkout in `/opt/btp/repo` differs from that release.
+  That is the case during a deploy, or after one failed before recording itself; an image and
+  compose files of different releases are never mixed;
 - logs start, end, duration and exit code.
 
 Timers use `OnCalendar=… Europe/Berlin`, so they follow the service day across DST, with

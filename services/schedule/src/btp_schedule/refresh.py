@@ -5,7 +5,7 @@ Like importer, every function expects a connection in autocommit mode.
 
 import logging
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from psycopg import sql
 
@@ -33,10 +33,10 @@ def activate_due(
 ) -> str | None:
     """Activate the staged version that is due (lifecycle.due_version); return its id, or None."""
     rows = conn.execute(
-        "SELECT version_id, activate_on FROM schedule.versions "
+        "SELECT version_id, activate_on, created_at FROM schedule.versions "
         "WHERE status = 'ready' AND activate_on IS NOT NULL"
     ).fetchall()
-    version_id = due_version((Staged(r[0], r[1]) for r in rows), today, lead_days)
+    version_id = due_version((Staged(r[0], r[1], r[2]) for r in rows), today, lead_days)
     if version_id is None:
         log.info("no staged version is due (%d staged)", len(rows))
         return None
@@ -44,8 +44,10 @@ def activate_due(
     return version_id
 
 
-def prune(conn: Connection) -> list[str]:
+def prune(conn: Connection, today: date) -> list[str]:
     """Delete the versions prune_candidates selects, in batches, then vacuum; return their ids.
+
+    today (Europe/Berlin) decides which versions serve yesterday's and today's service days.
 
     Holds the import lock, so no import runs meanwhile. Each batch commits on its own: an
     interrupted prune leaves a version partly deleted, and the next prune finishes it.
@@ -63,7 +65,17 @@ def prune(conn: Connection) -> list[str]:
         if not rows:
             return []
         now = rows[0][4]
-        doomed = prune_candidates((VersionState(r[0], r[1], r[2], r[3]) for r in rows), now)
+        # Trips of yesterday still run after midnight: keep the versions of both days.
+        in_use = {
+            r[0]
+            for r in conn.execute(
+                "SELECT schedule.version_for_service_date(d) "
+                "FROM (VALUES (%s::date), (%s)) AS days(d)",
+                (today - timedelta(days=1), today),
+            )
+            if r[0] is not None
+        }
+        doomed = prune_candidates((VersionState(r[0], r[1], r[2], r[3]) for r in rows), now, in_use)
         for version_id in doomed:
             started = time.monotonic()
             deleted = {

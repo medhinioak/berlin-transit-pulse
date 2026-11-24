@@ -26,12 +26,21 @@ from btp_schedule.gtfs import (
     REQUIRED_FILES,
     GtfsSource,
     Row,
+    feed_start_date,
     plain_rows,
     route_rows,
     stop_time_rows,
     trip_rows,
 )
-from btp_schedule.lifecycle import activate_on_for, date_range_errors, effective_from
+from btp_schedule.lifecycle import (
+    Staged,
+    activate_on_for,
+    berlin_today,
+    date_range_errors,
+    effective_from,
+    superseded,
+    too_far_ahead,
+)
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +56,10 @@ IMPORT_LOCK = 0x5C4ED01E
 
 class ImportFailed(Exception):
     """The import or its validation failed; the version is marked failed."""
+
+
+class NotStageableYet(ImportFailed):
+    """The feed starts too far ahead to be staged; nothing was loaded or recorded."""
 
 
 @dataclass(frozen=True)
@@ -210,6 +223,13 @@ def _import_locked(
             )
         return ImportResult(version_id, imported=False)
 
+    # Checked before loading: a feed published weeks ahead would otherwise be loaded and
+    # rolled back on every daily refresh until its staging window opens.
+    start = feed_start_date(source, source.names())
+    if start is not None and (reason := too_far_ahead(start, today)):
+        log.warning("version %s not imported: %s", version_id, reason)
+        raise NotStageableYet(reason)
+
     # A failed or interrupted earlier attempt is retried. Its rows were never committed: data
     # and the ready status are written in one transaction.
     with conn.transaction():
@@ -289,8 +309,9 @@ def activate(conn: Connection, version_id: str, *, at: datetime | None = None) -
     """Make version_id the active version and retire the previous one, in one transaction.
 
     Records the activation in version_activations (closing the previous one), with the time it
-    starts to apply to service days (lifecycle.effective_from). at defaults to the database's
-    now(); tests pass it to simulate a swap night.
+    starts to apply to service days (lifecycle.effective_from), and clears activate_on of the
+    staged versions it supersedes (lifecycle.superseded). at defaults to the database's now();
+    tests pass it to simulate a swap night.
     """
     with conn.transaction():
         # Serialises activations; readers of the views are not blocked.
@@ -313,6 +334,19 @@ def activate(conn: Connection, version_id: str, *, at: datetime | None = None) -
         if current not in ("ready", "retired"):
             raise ValueError(f"version {version_id} is {current}, not ready or retired")
         at = at or db_now
+        latest = conn.execute(
+            "SELECT max(effective_from) FROM schedule.version_activations"
+        ).fetchone()
+        starts = effective_from(at, activate_on, first_activation, latest[0] if latest else None)
+        staged = [
+            Staged(r[0], r[1], r[2])
+            for r in conn.execute(
+                "SELECT version_id, activate_on, created_at FROM schedule.versions "
+                "WHERE status = 'ready' AND activate_on IS NOT NULL AND version_id <> %s",
+                (version_id,),
+            )
+        ]
+        obsolete = superseded(staged, activate_on, berlin_today(at))
         conn.execute("UPDATE schedule.versions SET status = 'retired' WHERE status = 'active'")
         conn.execute(
             "UPDATE schedule.versions SET status = 'active', activated_at = %s "
@@ -327,8 +361,14 @@ def activate(conn: Connection, version_id: str, *, at: datetime | None = None) -
         conn.execute(
             "INSERT INTO schedule.version_activations (version_id, activated_at, effective_from) "
             "VALUES (%s, %s, %s)",
-            (version_id, at, effective_from(at, activate_on, first_activation)),
+            (version_id, at, starts),
         )
+        if obsolete:
+            conn.execute(
+                "UPDATE schedule.versions SET activate_on = NULL WHERE version_id = ANY(%s)",
+                (obsolete,),
+            )
+            log.info("superseded staged versions %s; activate-due skips them now", obsolete)
     log.info("version %s is now active", version_id)
 
 

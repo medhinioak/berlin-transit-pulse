@@ -12,9 +12,11 @@ from btp_schedule.lifecycle import (
     effective_from,
     prune_candidates,
     start_of_day,
+    superseded,
 )
 
 SWAP = date(2026, 12, 13)
+IMPORTED = datetime(2026, 11, 25, 3, 30, tzinfo=UTC)
 
 
 def test_berlin_day_boundary() -> None:
@@ -63,22 +65,54 @@ def test_effective_from_for_rollback_and_unstaged() -> None:
 
 def test_due_version_on_the_eve_only() -> None:
     """activate-due picks a version starting tomorrow, not one starting the day after."""
-    staged = [Staged("new", SWAP)]
+    staged = [Staged("new", SWAP, IMPORTED)]
     assert due_version(staged, date(2026, 12, 11)) is None
     assert due_version(staged, date(2026, 12, 12)) == "new"
 
 
 def test_due_version_catches_up() -> None:
     """A version whose start has passed is due; of several, the latest start wins."""
-    staged = [Staged("old", date(2026, 12, 1)), Staged("new", SWAP)]
+    staged = [Staged("old", date(2026, 12, 1), IMPORTED), Staged("new", SWAP, IMPORTED)]
     assert due_version(staged, date(2026, 12, 14)) == "new"
     assert due_version(staged, date(2026, 12, 5)) == "old"
     assert due_version([], date(2026, 12, 14)) is None
 
 
+def test_due_version_same_start_newest_import_wins() -> None:
+    """A corrected republish with the same start date beats the original, whatever its hash."""
+    staged = [
+        Staged("f3aaaaaaaaaa", SWAP, IMPORTED),
+        Staged("1abbbbbbbbbb", SWAP, IMPORTED + timedelta(days=7)),
+    ]
+    assert due_version(staged, date(2026, 12, 12)) == "1abbbbbbbbbb"
+
+
+def test_superseded_staged_versions() -> None:
+    """Activating a version retires the staged ones starting no later; later ones stay."""
+    staged = [
+        Staged("dec01", date(2026, 12, 1), IMPORTED),
+        Staged("dec13", SWAP, IMPORTED),
+        Staged("jan10", date(2027, 1, 10), IMPORTED),
+    ]
+    # The 13 Dec version caught up on the 14th: the 1 Dec one must never come back.
+    assert superseded(staged, SWAP, date(2026, 12, 14)) == ["dec01", "dec13"]
+    # A republish without activate_on, activated on the 14th: overdue ones go, January stays.
+    assert superseded(staged, None, date(2026, 12, 14)) == ["dec01", "dec13"]
+    # The same republish on 5 Dec: 13 Dec is still a future timetable.
+    assert superseded(staged, None, date(2026, 12, 5)) == ["dec01"]
+
+
+def test_effective_from_never_before_an_earlier_activation() -> None:
+    """A backdated catch-up after a direct activation can't sort before it."""
+    direct = datetime(2026, 12, 15, 10, 0, tzinfo=BERLIN)
+    late = datetime(2026, 12, 15, 23, 40, tzinfo=BERLIN)
+    assert effective_from(late, SWAP, True, not_before=direct) == direct
+    assert effective_from(late, SWAP, True, not_before=None) == start_of_day(SWAP)
+
+
 def test_due_version_morning_refresh_never_activates_early() -> None:
     """With lead_days=0 a version starting tomorrow waits for the eve."""
-    staged = [Staged("new", SWAP)]
+    staged = [Staged("new", SWAP, IMPORTED)]
     assert due_version(staged, date(2026, 12, 12), lead_days=0) is None
     assert due_version(staged, SWAP, lead_days=0) == "new"
 
@@ -119,6 +153,17 @@ def test_prune_previous_is_the_last_deactivated() -> None:
         _v("newer-created", "retired", 30, deactivated_days_ago=5),
     ]
     assert prune_candidates(versions, NOW) == ["newer-created"]
+
+
+def test_prune_keeps_versions_in_use() -> None:
+    """A retired version still serving yesterday's service day is kept."""
+    versions = [
+        _v("c", "active", 1),
+        _v("b", "retired", 2, deactivated_days_ago=1),
+        _v("a", "retired", 3, deactivated_days_ago=2),
+    ]
+    assert prune_candidates(versions, NOW) == ["a"]
+    assert prune_candidates(versions, NOW, in_use={"a", "b"}) == []
 
 
 def test_prune_nothing_to_do() -> None:

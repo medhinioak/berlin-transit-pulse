@@ -20,7 +20,16 @@ name=$1
 service=$2
 shift 2
 
-sha=$(cat "$BTP_DIR/deployed_sha")
+# The images of deployed_sha and the compose files of the checkout must be the same release.
+# They differ while a deploy runs, or after one failed before recording itself: skip the run
+# then (the next scheduled run tries again) rather than mix them.
+sha=$(cat "$BTP_DIR/deployed_sha" 2>/dev/null || true)
+[ -n "$sha" ] || { log "$name: no release deployed yet, not running"; exit 1; }
+head=$(git -C "$REPO" rev-parse HEAD)
+if [ "$head" != "$sha" ]; then
+  log "$name: $REPO is at $head but the deployed release is $sha (deploy running or failed), not running"
+  exit 1
+fi
 export BTP_IMAGE_TAG=$sha
 COMPOSE=(docker compose -p btp-live --env-file "$BTP_DIR/.env"
   -f "$REPO/deploy/compose/compose.yaml" -f "$REPO/deploy/compose/compose.release.yaml")

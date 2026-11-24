@@ -7,6 +7,7 @@ import re
 import zipfile
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from datetime import date, datetime
 from pathlib import Path
 from typing import TextIO
 
@@ -223,3 +224,32 @@ def route_rows(source: GtfsSource, version_id: str, berlin_routes: set[str]) -> 
             raise ValueError(f"route {route_id!r} has no route_type")
         mode = mode_for_route_type(int(route_type))
         yield (version_id, *values, mode.value, route_id in berlin_routes)
+
+
+def _gtfs_date(value: str | None) -> date | None:
+    """Parse a GTFS date (YYYYMMDD); None if empty or malformed."""
+    try:
+        return datetime.strptime(value.strip(), "%Y%m%d").date() if value else None
+    except ValueError:
+        return None
+
+
+def feed_start_date(source: GtfsSource, names: set[str]) -> date | None:
+    """Return the feed's first date without loading it, by the same rule as the import.
+
+    feed_info's feed_start_date if set, else the earliest date in calendar and calendar_dates.
+    Reads only those small files, so a refresh can skip a feed that starts too far ahead.
+    """
+    if "feed_info.txt" in names:
+        starts = [_gtfs_date(v[0]) for v in source.rows("feed_info.txt", ["feed_start_date"])]
+        if found := [d for d in starts if d is not None]:
+            return min(found)
+    dates: list[date] = []
+    if "calendar.txt" in names:
+        for start, end in source.rows("calendar.txt", ["start_date", "end_date"]):
+            dates += [d for d in (_gtfs_date(start), _gtfs_date(end)) if d is not None]
+    if "calendar_dates.txt" in names:
+        for (value,) in source.rows("calendar_dates.txt", ["date"]):
+            if (d := _gtfs_date(value)) is not None:
+                dates.append(d)
+    return min(dates, default=None)

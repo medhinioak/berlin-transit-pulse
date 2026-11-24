@@ -18,6 +18,7 @@ from btp_schedule.download import fetch
 from btp_schedule.importer import (
     ImportFailed,
     ImportResult,
+    NotStageableYet,
     activate,
     apply_schema,
     import_source,
@@ -78,9 +79,19 @@ def _print_status(conn: psycopg.Connection[object]) -> None:
 
 
 def _backup(result: ImportResult, path: Path, settings: ScheduleSettings) -> None:
-    """Copy a newly imported zip to the data bucket, if one is set (folders are skipped)."""
-    if result.imported and settings.raw_bucket and path.is_file():
-        backup_zip(settings.raw_bucket, settings.aws_region, result.version_id, path)
+    """Copy an imported zip to the data bucket once, if one is set (folders are skipped).
+
+    A marker in the cache directory records a done backup, so a failed one is retried on the
+    next import or refresh of the same zip without uploading 84 MB every day.
+    """
+    if not settings.raw_bucket or not path.is_file():
+        return
+    marker = settings.schedule_cache_dir / "backed-up" / result.version_id
+    if marker.exists():
+        return
+    if backup_zip(settings.raw_bucket, settings.aws_region, result.version_id, path):
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
 
 
 def _refresh(
@@ -97,6 +108,8 @@ def _refresh(
     try:
         path, url = _source(args, settings)
         result = import_source(conn, path, url, today=today, activate_after=True)
+    except NotStageableYet:
+        pass  # logged; not a failure: the next refresh in the staging window imports it
     except ImportFailed:
         code = 1
     except (httpx.HTTPError, OSError, zipfile.BadZipFile) as exc:
@@ -106,7 +119,7 @@ def _refresh(
         _backup(result, path, settings)
     # A staged version whose start has passed (activate-due missed it) is caught up now.
     activate_due(conn, today, lead_days=0)
-    prune(conn)
+    prune(conn, today)
     return code
 
 
@@ -130,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
             path, url = _source(args, settings)
             try:
                 result = import_source(conn, path, url, today=today, activate_after=args.activate)
+            except NotStageableYet:
+                return 0  # logged; the active version stays, and a deploy goes on quietly
             except ImportFailed:
                 return 1
             _backup(result, path, settings)
