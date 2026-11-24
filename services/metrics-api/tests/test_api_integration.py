@@ -137,6 +137,13 @@ def test_wrong_active_schedule_fails_clearly() -> None:
                 "INSERT INTO schedule.versions (version_id, sha256, source_url, status) "
                 "VALUES ('test-wrong', 'test', 'test:wrong', 'active')"
             )
+            # The activation history decides each service day's version: make test-wrong the
+            # only activation, so it applies to every day, the recording's included.
+            conn.execute("DELETE FROM schedule.version_activations")
+            conn.execute(
+                "INSERT INTO schedule.version_activations (version_id, activated_at, "
+                "effective_from) VALUES ('test-wrong', now(), now())"
+            )
             conn.execute(
                 "SELECT set_config('btp.as_of', %s, true)", [fixture_as_of(FIXTURE_SET).isoformat()]
             )

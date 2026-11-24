@@ -1,19 +1,30 @@
-"""Command line: btp-schedule import | activate | status."""
+"""Command line: btp-schedule import | refresh | activate | activate-due | status."""
 
 import argparse
 import json
 import logging
 import sys
-from datetime import datetime
+import zipfile
+from datetime import UTC, date, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
+import httpx
 import psycopg
 
 from btp_common.fixtures import mini_gtfs_dir
 from btp_common.logging import configure_logging
+from btp_schedule.backup import backup_zip
 from btp_schedule.download import fetch
-from btp_schedule.importer import ImportFailed, activate, apply_schema, import_source, status
+from btp_schedule.importer import (
+    ImportFailed,
+    ImportResult,
+    activate,
+    apply_schema,
+    import_source,
+    status,
+)
+from btp_schedule.lifecycle import berlin_today
+from btp_schedule.refresh import activate_due, prune
 from btp_schedule.settings import ScheduleSettings
 
 log = logging.getLogger(__name__)
@@ -24,12 +35,19 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="btp-schedule", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     imp = commands.add_parser("import", help="import a static GTFS feed as a new version")
-    source = imp.add_mutually_exclusive_group()
-    source.add_argument("--url", help="download from this URL (default: BTP_SCHEDULE_URL)")
-    source.add_argument("--file", type=Path, help="a GTFS zip or folder on disk")
+    ref = commands.add_parser(
+        "refresh", help="import if changed, activate unless staged, back up the zip, prune"
+    )
+    for sub in (imp, ref):
+        source = sub.add_mutually_exclusive_group()
+        source.add_argument("--url", help="download from this URL (default: BTP_SCHEDULE_URL)")
+        source.add_argument("--file", type=Path, help="a GTFS zip or folder on disk")
     imp.add_argument("--activate", action="store_true", help="activate the version when ready")
     act = commands.add_parser("activate", help="make a ready or retired version active")
     act.add_argument("version_id")
+    commands.add_parser(
+        "activate-due", help="activate a staged version starting tomorrow, or one overdue"
+    )
     commands.add_parser("status", help="list versions and row counts")
     return parser
 
@@ -53,9 +71,43 @@ def _print_status(conn: psycopg.Connection[object]) -> None:
     for v in status(conn):
         counts = json.dumps(v["row_counts"]) if v["row_counts"] else ""
         dates = f"{v['feed_start_date']}..{v['feed_end_date']}" if v["feed_start_date"] else ""
-        print(f"{v['version_id']}  {v['status']:<9} {dates:<22} {counts}")
+        staged = f"activate_on={v['activate_on']}" if v["activate_on"] else ""
+        print(f"{v['version_id']}  {v['status']:<9} {dates:<22} {staged:<22} {counts}")
         if v["failure_reason"]:
             print(f"    failed: {v['failure_reason']}")
+
+
+def _backup(result: ImportResult, path: Path, settings: ScheduleSettings) -> None:
+    """Copy a newly imported zip to the data bucket, if one is set (folders are skipped)."""
+    if result.imported and settings.raw_bucket and path.is_file():
+        backup_zip(settings.raw_bucket, settings.aws_region, result.version_id, path)
+
+
+def _refresh(
+    conn: psycopg.Connection[object],
+    args: argparse.Namespace,
+    settings: ScheduleSettings,
+    today: date,
+) -> int:
+    """Run the daily refresh; return 1 if download or import failed (the active version stays).
+
+    The catch-up and the prune run either way.
+    """
+    code = 0
+    try:
+        path, url = _source(args, settings)
+        result = import_source(conn, path, url, today=today, activate_after=True)
+    except ImportFailed:
+        code = 1
+    except (httpx.HTTPError, OSError, zipfile.BadZipFile) as exc:
+        log.error("download failed and no cached zip: %s", exc)
+        code = 1
+    else:
+        _backup(result, path, settings)
+    # A staged version whose start has passed (activate-due missed it) is caught up now.
+    activate_due(conn, today, lead_days=0)
+    prune(conn)
+    return code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -73,19 +125,24 @@ def main(argv: list[str] | None = None) -> int:
         connect_timeout=10,
     ) as conn:
         apply_schema(conn)
+        today = berlin_today(datetime.now(UTC))
         if args.command == "import":
             path, url = _source(args, settings)
-            today = datetime.now(ZoneInfo("Europe/Berlin")).date()
             try:
-                import_source(conn, path, url, today=today, activate_after=args.activate)
+                result = import_source(conn, path, url, today=today, activate_after=args.activate)
             except ImportFailed:
                 return 1
+            _backup(result, path, settings)
         elif args.command == "activate":
             try:
                 activate(conn, args.version_id)
             except ValueError as exc:
                 log.error("%s", exc)
                 return 1
+        elif args.command == "refresh":
+            return _refresh(conn, args, settings, today)
+        elif args.command == "activate-due":
+            activate_due(conn, today)
         else:
             _print_status(conn)
     return 0

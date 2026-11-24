@@ -1,0 +1,13 @@
+# Activates a staged schedule version on the eve of its first day (or one overdue), so it is
+# active before that service day starts at midnight. Started by btp-schedule-activate.timer;
+# installed by deploy/release/deploy.sh (ADR-0011).
+[Unit]
+Description=btp: activate a staged schedule version that is due
+Documentation=https://github.com/medhinioak/berlin-transit-pulse/blob/main/docs/runbook.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/btp/repo/deploy/release/run-job.sh schedule-activate schedule-import btp-schedule activate-due
+TimeoutStartSec=10min

@@ -1,6 +1,7 @@
 # ADR-0009: Version the static GTFS and swap versions atomically
 
-- Status: Accepted
+- Status: Accepted; extended by [ADR-0023](0023-stage-record-and-prune-schedule-versions.md)
+  (staging, activation history, version per service day, pruning)
 - Date: 2026-11-18
 - Decider: Maintainer (@medhinioak)
 - Review: decisions taken in issue #5; implementation reviewed with Claude Code `/code-review`,

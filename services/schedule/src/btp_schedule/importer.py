@@ -31,6 +31,7 @@ from btp_schedule.gtfs import (
     stop_time_rows,
     trip_rows,
 )
+from btp_schedule.lifecycle import activate_on_for, date_range_errors, effective_from
 
 log = logging.getLogger(__name__)
 
@@ -69,15 +70,18 @@ def validation_errors(
     date_range: tuple[date | None, date | None],
     today: date,
 ) -> list[str]:
-    """Return the reasons a loaded version must not be used; empty if it is fine."""
+    """Return the reasons a loaded version must not be used; empty if it is fine.
+
+    The feed must not have ended, and may start up to STAGING_DAYS after today (staging).
+    """
     errors = [f"{t} has no rows" for t in NON_EMPTY_TABLES if row_counts.get(t, 0) == 0]
     if unknown_trip_ids:
         errors.append(f"stop_times reference unknown trips, e.g. {', '.join(unknown_trip_ids)}")
     start, end = date_range
     if start is None or end is None:
         errors.append("no feed date range (feed_info, calendar and calendar_dates are empty)")
-    elif not start <= today <= end:
-        errors.append(f"feed dates {start}..{end} don't cover {today}")
+    else:
+        errors += date_range_errors(start, end, today)
     return errors
 
 
@@ -193,12 +197,12 @@ def _import_locked(
     """Run import_source while holding the import lock."""
     version_id = sha256[:12]
     row = conn.execute(
-        "SELECT status FROM schedule.versions WHERE version_id = %s", (version_id,)
+        "SELECT status, activate_on FROM schedule.versions WHERE version_id = %s", (version_id,)
     ).fetchone()
     if row is not None and row[0] in COMPLETE:
         log.info("version %s already imported (%s), nothing to do", version_id, row[0])
         if activate_after and row[0] == "ready":
-            activate(conn, version_id)
+            _activate_unless_staged(conn, version_id, row[1], today)
         elif activate_after and row[0] == "retired":
             log.warning(
                 "version %s is retired, not re-activating it; use `btp-schedule activate`",
@@ -234,10 +238,12 @@ def _import_locked(
             )
             if errors:
                 raise ImportFailed("; ".join(errors))
+            activate_on = activate_on_for(date_range[0], today)
             conn.execute(
                 """
                 UPDATE schedule.versions SET status = 'ready', row_counts = %(counts)s,
-                    feed_start_date = %(start)s, feed_end_date = %(end)s
+                    feed_start_date = %(start)s, feed_end_date = %(end)s,
+                    activate_on = %(activate_on)s
                 WHERE version_id = %(v)s
                 """,
                 {
@@ -245,6 +251,7 @@ def _import_locked(
                     "counts": json.dumps(counts),
                     "start": date_range[0],
                     "end": date_range[1],
+                    "activate_on": activate_on,
                 },
             )
     except (ImportFailed, psycopg.Error, ValueError, OSError, csv.Error, zipfile.BadZipFile) as exc:
@@ -264,30 +271,63 @@ def _import_locked(
         raise ImportFailed(reason) from exc
     log.info("version %s ready in %.1f s", version_id, time.monotonic() - started)
     if activate_after:
-        activate(conn, version_id)
+        _activate_unless_staged(conn, version_id, activate_on, today)
     return ImportResult(version_id, imported=True)
 
 
-def activate(conn: Connection, version_id: str) -> None:
-    """Make version_id the active version and retire the previous one, in one transaction."""
+def _activate_unless_staged(
+    conn: Connection, version_id: str, activate_on: date | None, today: date
+) -> None:
+    """Activate a ready version now, unless it is staged for a later day (activate-due does)."""
+    if activate_on is not None and activate_on > today:
+        log.info("version %s is staged: activate-due activates it for %s", version_id, activate_on)
+        return
+    activate(conn, version_id)
+
+
+def activate(conn: Connection, version_id: str, *, at: datetime | None = None) -> None:
+    """Make version_id the active version and retire the previous one, in one transaction.
+
+    Records the activation in version_activations (closing the previous one), with the time it
+    starts to apply to service days (lifecycle.effective_from). at defaults to the database's
+    now(); tests pass it to simulate a swap night.
+    """
     with conn.transaction():
         # Serialises activations; readers of the views are not blocked.
         conn.execute("LOCK TABLE schedule.versions IN SHARE ROW EXCLUSIVE MODE")
         row = conn.execute(
-            "SELECT status FROM schedule.versions WHERE version_id = %s", (version_id,)
+            """
+            SELECT status, activate_on, now(),
+                NOT EXISTS (SELECT 1 FROM schedule.version_activations a
+                            WHERE a.version_id = v.version_id)
+            FROM schedule.versions v WHERE version_id = %s
+            """,
+            (version_id,),
         ).fetchone()
         if row is None:
             raise ValueError(f"unknown version {version_id}")
-        if row[0] == "active":
+        current, activate_on, db_now, first_activation = row
+        if current == "active":
             log.info("version %s is already active", version_id)
             return
-        if row[0] not in ("ready", "retired"):
-            raise ValueError(f"version {version_id} is {row[0]}, not ready or retired")
+        if current not in ("ready", "retired"):
+            raise ValueError(f"version {version_id} is {current}, not ready or retired")
+        at = at or db_now
         conn.execute("UPDATE schedule.versions SET status = 'retired' WHERE status = 'active'")
         conn.execute(
-            "UPDATE schedule.versions SET status = 'active', activated_at = now() "
+            "UPDATE schedule.versions SET status = 'active', activated_at = %s "
             "WHERE version_id = %s",
-            (version_id,),
+            (at, version_id),
+        )
+        conn.execute(
+            "UPDATE schedule.version_activations SET deactivated_at = %s "
+            "WHERE deactivated_at IS NULL",
+            (at,),
+        )
+        conn.execute(
+            "INSERT INTO schedule.version_activations (version_id, activated_at, effective_from) "
+            "VALUES (%s, %s, %s)",
+            (version_id, at, effective_from(at, activate_on, first_activation)),
         )
     log.info("version %s is now active", version_id)
 
@@ -298,7 +338,7 @@ def status(conn: Connection) -> list[dict[str, Any]]:
         return cur.execute(
             """
             SELECT version_id, status, created_at, activated_at, feed_start_date,
-                   feed_end_date, row_counts, failure_reason, source_url
+                   feed_end_date, activate_on, row_counts, failure_reason, source_url
             FROM schedule.versions ORDER BY created_at DESC
             """
         ).fetchall()

@@ -26,3 +26,7 @@ class ScheduleSettings(BaseServiceSettings):
     feed_contact: str = REPO_URL
     # fixtures: `import` without --url/--file imports the mini GTFS from fixtures/, offline.
     feed_mode: Literal["live", "fixtures"] = "live"
+    # Data bucket for zip backups (backups/gtfs/, btp_schedule.backup); unset means off.
+    raw_bucket: str | None = None
+    # Passed to boto3 as region_name (botocore ignores AWS_REGION; only AWS_DEFAULT_REGION).
+    aws_region: str = "eu-north-1"

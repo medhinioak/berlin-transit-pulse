@@ -26,12 +26,22 @@ def test_unknown_trips() -> None:
     assert errors == ["stop_times reference unknown trips, e.g. t1, t2"]
 
 
-def test_date_range_must_cover_today() -> None:
-    """A feed that ended yesterday or starts tomorrow is not usable today."""
-    assert validation_errors(GOOD_COUNTS, [], RANGE, date(2026, 11, 17)) == [
-        "feed dates 2026-11-18..2027-12-11 don't cover 2026-11-17"
+def test_date_range_must_not_have_ended() -> None:
+    """A feed that ended yesterday is not usable; one without dates neither."""
+    assert validation_errors(GOOD_COUNTS, [], RANGE, date(2027, 12, 12)) == [
+        "feed dates 2026-11-18..2027-12-11 don't cover 2027-12-12"
     ]
-    assert validation_errors(GOOD_COUNTS, [], RANGE, date(2027, 12, 12))
     assert validation_errors(GOOD_COUNTS, [], (None, None), date(2026, 12, 1)) == [
         "no feed date range (feed_info, calendar and calendar_dates are empty)"
+    ]
+
+
+def test_feed_starting_within_21_days_is_staged() -> None:
+    """The 13 Dec timetable is valid from 22 Nov; one day earlier it is too far ahead."""
+    new = (date(2026, 12, 13), date(2027, 12, 11))
+    assert validation_errors(GOOD_COUNTS, [], new, date(2026, 12, 12)) == []
+    assert validation_errors(GOOD_COUNTS, [], new, date(2026, 11, 22)) == []
+    assert validation_errors(GOOD_COUNTS, [], new, date(2026, 11, 21)) == [
+        "feed starts on 2026-12-13, more than 21 days after 2026-11-21; "
+        "it can be staged from 2026-11-22"
     ]

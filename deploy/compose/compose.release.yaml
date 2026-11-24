@@ -18,6 +18,8 @@ services:
     image: ghcr.io/medhinioak/btp-schedule:${BTP_IMAGE_TAG:?set BTP_IMAGE_TAG to the git SHA to deploy}
     environment:
       BTP_FEED_MODE: live
+      # Zip backups to backups/gtfs/ (#24): instance role, bucket from SSM, as for ingest below.
+      BTP_RAW_BUCKET: ${BTP_RAW_BUCKET:?set BTP_RAW_BUCKET (SSM /btp/release/data_bucket)}
     # A failed import (a new timetable published before its start date, a failed download)
     # must not stop a deploy while an active version keeps serving: exit 0 then, and print
     # the marker deploy.sh turns into a workflow warning. With no active version at all (a new
