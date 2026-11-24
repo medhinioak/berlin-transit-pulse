@@ -1,7 +1,8 @@
 # schedule
 
 Imports VBB's static GTFS into the Postgres schema `schedule` as versions, and activates one
-of them. Other services read only the `schedule.v_*` views, which show the active version.
+of them. Other services read only the `schedule.v_*` views, which show the active version
+(one per table, plus `v_active_version`: its id, feed dates and activation time).
 
 Data: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC-BY 4.0
 (<https://creativecommons.org/licenses/by/4.0/>), from <https://www.vbb.de/vbbgtfs>.
@@ -26,6 +27,12 @@ serialised: the second waits, then finds the version already imported.
 `--activate` activates a new or `ready` version. It never re-activates a `retired` one: after a
 rollback with `btp-schedule activate <older>`, the next `make up` leaves the rollback in place.
 To go forward again, run `btp-schedule activate <newer>` by hand.
+
+Fixtures and live mode never share these versions: `make up` runs compose project
+`btp-fixtures` and `BTP_FEED_MODE=live make up` runs `btp-live`, each with its own Postgres
+volume (#75). So switching modes needs no re-activation. Each project keeps its own active
+version, and the rule above stays as it is. Before #75 both modes used one volume, and a live
+run left the mini version `retired` for good.
 
 In compose, the one-shot container `schedule-import` runs `import --activate` on `make up` and
 exits. `make up` waits for it. Services that read the schedule depend on it with

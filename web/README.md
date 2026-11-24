@@ -38,6 +38,6 @@ the unit change to minutes.
 ## Checks
 
 No automated tests yet. Before a change: keyboard through the page, check 320 px and dark
-mode, stop `metrics-api` (`docker compose -f deploy/compose/compose.yaml stop metrics-api`)
+mode, stop `metrics-api` (`docker compose -p btp-fixtures -f deploy/compose/compose.yaml stop metrics-api`)
 to see the error state, and confirm in the network tab that only this origin is requested
 (the `Content-Security-Policy` header enforces it).

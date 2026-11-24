@@ -1,5 +1,6 @@
 """SQL the API runs. Only reads the marts schema, as the read-only role btp_api."""
 
+from collections.abc import Collection
 from datetime import datetime
 from typing import Any
 
@@ -17,6 +18,11 @@ LATEST_FEED_TS = "SELECT latest_feed_ts FROM marts.v_feed_status"
 
 SET_AS_OF = "SELECT set_config('btp.as_of', %s, false)"
 
+SCHEDULE_COVERAGE = """
+    SELECT (SELECT version_id FROM marts.v_schedule_status),
+           (SELECT count(*) FROM marts.v_schedule_trips WHERE trip_id = ANY(%s))
+"""
+
 
 def now_by_mode(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
     """Return the rows of marts.v_now_by_mode, one per mode."""
@@ -33,3 +39,12 @@ def latest_feed_ts(conn: psycopg.Connection[Any]) -> datetime | None:
 def set_as_of(conn: psycopg.Connection[Any], as_of: datetime) -> None:
     """Pin the views' reference time for this session (setting btp.as_of, ADR-0019)."""
     conn.execute(SET_AS_OF, [as_of.isoformat()])
+
+
+def schedule_coverage(
+    conn: psycopg.Connection[Any], trip_ids: Collection[str]
+) -> tuple[str | None, int]:
+    """Return the active schedule version (None if none) and how many trip_ids it contains."""
+    row = conn.execute(SCHEDULE_COVERAGE, [list(trip_ids)]).fetchone()
+    assert row is not None  # a SELECT without FROM always returns one row
+    return row[0], row[1]

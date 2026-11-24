@@ -74,6 +74,13 @@ definitions of ADR-0005 (M3). Don't present it as one.
 One row: `latest_feed_ts` (newest `feed_ts` the processor applied) and `computed_at`.
 metrics-api uses it for `/health`, since `btp_api` can't read `events`.
 
+### `marts.v_schedule_status` and `marts.v_schedule_trips`
+
+The active schedule version (`version_id`, feed dates, `activated_at`; no row if none is
+active) and its `trip_id`s. In fixtures mode metrics-api checks with them that every replayed
+trip is in the active schedule, and reports it in `/health` if not (#75). They exist because
+`btp_api` can't read `schedule`.
+
 ## Performance
 
 The view starts from the trips still in the feed (`removed_at IS NULL`; ingest tombstones
@@ -97,12 +104,6 @@ a Postgres restart pays for an empty cache; the 500 ms target (#9) holds once wa
   the active schedule version. Trips of the previous service day still running after
   midnight keep their old trip_ids, so after the new version is activated they drop out
   until they finish. Handling version swaps is for M3, with the weekly refresh (#24).
-- **Mixed modes**: compose runs every service in fixtures mode by default, and the mini GTFS
-  matches the fixture trips. Importing the live static GTFS while replaying fixtures works only
-  while the live GTFS still contains the 2026-11-18 trip_ids; after the timetable change on
-  2026-12-13 the fixtures-mode endpoint comes back empty. Set `BTP_FEED_MODE` for the whole
-  stack, not per service. Switching modes on an existing volume can leave the wrong schedule
-  version active (#75).
 - **No retention yet** (M3): `max(feed_ts)` in `v_feed_status` and the `service_date` filter
   on `trip_state` are sequential scans. They take ~20 ms at ~80k rows (one day) and grow with
   every day kept. Retention or an index on `trip_state` (processor schema) comes before it

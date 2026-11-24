@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 import psycopg
 import pytest
@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from btp_metrics_api import app as app_module
 from btp_metrics_api import queries
 from btp_metrics_api.models import ATTRIBUTION
-from btp_metrics_api.settings import ApiSettings
+from btp_metrics_api.settings import ApiSettings, fixture_trip_ids
 
 
 class FakePool:
@@ -30,11 +30,16 @@ class FakePool:
         yield object()
 
 
-def client(pool: FakePool, monkeypatch: pytest.MonkeyPatch, **queries_stub: Any) -> TestClient:
+def client(
+    pool: FakePool,
+    monkeypatch: pytest.MonkeyPatch,
+    feed_mode: Literal["live", "fixtures"] = "live",
+    **queries_stub: Any,
+) -> TestClient:
     """Build the app without its lifespan (no real pool) and stub the queries."""
     for name, value in queries_stub.items():
         monkeypatch.setattr(queries, name, value)
-    app = app_module.create_app(ApiSettings(feed_mode="live"))
+    app = app_module.create_app(ApiSettings(feed_mode=feed_mode))
     app.state.pool = pool
     return TestClient(app)
 
@@ -117,3 +122,44 @@ def test_docs_page_is_self_hosted(monkeypatch: pytest.MonkeyPatch) -> None:
     assert c.get("/docs-assets/init.js").status_code == 200
     assert c.get("/redoc").status_code == 404
     assert c.get("/openapi.json").status_code == 200
+
+
+def test_health_fixtures_schedule_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fixtures mode with the wrong schedule active: 503 naming the version, despite fresh data."""
+    fresh = datetime.now(UTC)
+    c = client(
+        FakePool(),
+        monkeypatch,
+        feed_mode="fixtures",
+        latest_feed_ts=lambda conn: fresh,
+        schedule_coverage=lambda conn, ids: ("8255349c4cd3", 16),
+    )
+    response = c.get("/health")
+    assert response.status_code == 503
+    reason = response.json()["reason"]
+    expected = len(fixture_trip_ids("rush-hour"))
+    assert reason.startswith(f"active schedule version 8255349c4cd3 has 16 of the {expected} trips")
+
+
+def test_health_fixtures_schedule_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fixtures mode with every replayed trip in the active schedule: 200."""
+    fresh = datetime.now(UTC)
+    c = client(
+        FakePool(),
+        monkeypatch,
+        feed_mode="fixtures",
+        latest_feed_ts=lambda conn: fresh,
+        schedule_coverage=lambda conn, ids: ("mini", len(ids)),
+    )
+    assert c.get("/health").status_code == 200
+
+
+def test_health_live_mode_skips_schedule_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Live mode doesn't compare the schedule with the fixtures."""
+
+    def fail(conn: object, ids: object) -> None:
+        raise AssertionError("schedule_coverage called in live mode")
+
+    fresh = datetime.now(UTC)
+    c = client(FakePool(), monkeypatch, latest_feed_ts=lambda conn: fresh, schedule_coverage=fail)
+    assert c.get("/health").status_code == 200

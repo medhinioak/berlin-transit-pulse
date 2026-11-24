@@ -14,6 +14,49 @@ make logs          # follow logs
 make down          # stop, keep data
 ```
 
+Every target works on the stack of the mode in `BTP_FEED_MODE` (default `fixtures`), so live
+mode needs it on each command: `BTP_FEED_MODE=live make logs`, `BTP_FEED_MODE=live make down`.
+
+## Modes and projects
+
+Each data mode is its own compose project, with its own Kafka, Postgres and cache volumes
+(#75). A mode never sees the other's schedule versions or events.
+
+| Command | Project | Data |
+| --- | --- | --- |
+| `make up` | `btp-fixtures` | replays `fixtures/vbb-rt/` against the mini GTFS; no network |
+| `BTP_FEED_MODE=live make up` | `btp-live` | polls the VBB feed, imports VBB's current static GTFS |
+| `scripts/smoke.sh` | `btp-smoke` | fixtures, removed again (`down -v`) at the end |
+| release server ([`deploy.sh`](../release/deploy.sh)) | `btp-live` | live |
+
+`compose.yaml` has no `name:`; the Makefile always passes `-p`
+(`COMPOSE_PROJECT_NAME`, default `btp-$(BTP_FEED_MODE)`). By hand, pass it too:
+`docker compose -p btp-fixtures -f deploy/compose/compose.yaml ps`.
+
+All projects bind the same localhost ports, so only one runs at a time. `make up` refuses
+while another one runs and names the command that stops it.
+
+Switching modes needs no manual step:
+
+```sh
+make down && BTP_FEED_MODE=live make up   # fixtures -> live
+BTP_FEED_MODE=live make down && make up   # live -> fixtures: the mini GTFS is still active
+```
+
+In fixtures mode, metrics-api checks that the replayed trips are in the active schedule and
+reports it in `/health` if not ([metrics-api README](../../services/metrics-api/README.md#schedule-check-fixtures-mode)).
+
+### Volumes from v0.1
+
+Up to v0.1 there was one project, `btp`, for both modes. Its volumes (`btp_kafka-data`,
+`btp_postgres-data`, `btp_schedule-cache`) are no longer used and nothing deletes them. To
+remove them:
+
+```sh
+docker volume ls --filter name=btp_     # check what is there
+docker compose -p btp -f deploy/compose/compose.yaml down -v
+```
+
 ## What runs
 
 | Container | Image | Purpose |
@@ -103,12 +146,13 @@ metrics-api ~48. With web (#10, 2026-11-20): web ~9 MB. A new service needs a li
 
 ## Resetting
 
-The init SQL runs only when the Postgres volume is empty. To start from scratch (this deletes
-all Kafka and Postgres data, and the cached GTFS zip in the `schedule-cache` volume):
+The init SQL runs only when the Postgres volume is empty. To start one mode from scratch (this
+deletes that project's Kafka and Postgres data, and the cached GTFS zip in its
+`schedule-cache` volume; the other mode is untouched):
 
 ```sh
-docker compose -f deploy/compose/compose.yaml down -v
-make up
+docker compose -p btp-fixtures -f deploy/compose/compose.yaml down -v && make up
+docker compose -p btp-live -f deploy/compose/compose.yaml down -v && BTP_FEED_MODE=live make up
 ```
 
 ## Release override

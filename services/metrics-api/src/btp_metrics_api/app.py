@@ -17,9 +17,10 @@ from btp_metrics_api.models import (
     NowByModeResponse,
     check_health,
     database_unavailable,
+    schedule_mismatch,
     shape_now_by_mode,
 )
-from btp_metrics_api.settings import ApiSettings, reference_time
+from btp_metrics_api.settings import ApiSettings, fixture_trip_ids, reference_time
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +58,15 @@ def make_pool(settings: ApiSettings, as_of: datetime | None) -> ConnectionPool[C
 def create_app(settings: ApiSettings) -> FastAPI:
     """Build the app; the pool opens in the lifespan, so tests can skip it."""
     as_of = reference_time(settings)
+    # Fixtures mode only: the replayed trips must be in the active schedule (#75).
+    trip_ids = fixture_trip_ids(settings.fixture_set) if settings.feed_mode == "fixtures" else None
+
+    def schedule_problem(conn: Connection) -> str | None:
+        """Return why the active schedule can't serve the fixtures, or None (also in live mode)."""
+        if trip_ids is None:
+            return None
+        version_id, found = queries.schedule_coverage(conn, trip_ids)
+        return schedule_mismatch(version_id, found, len(trip_ids), settings.fixture_set)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -65,6 +75,18 @@ def create_app(settings: ApiSettings) -> FastAPI:
         pool.open(wait=False)
         app.state.pool = pool
         log.info("started", extra={"fields": {"as_of": as_of, "feed_mode": settings.feed_mode}})
+        if trip_ids is not None:
+            # Fail loudly at startup; /health keeps reporting it (503) until it is fixed.
+            try:
+                with pool.connection(timeout=POOL_TIMEOUT_S) as conn:
+                    problem = schedule_problem(conn)
+            except psycopg.Error as exc:
+                log.warning("schedule check skipped", extra={"fields": {"error": str(exc)}})
+            else:
+                if problem:
+                    log.error(
+                        "schedule doesn't match fixtures", extra={"fields": {"reason": problem}}
+                    )
         try:
             yield
         finally:
@@ -97,14 +119,18 @@ def create_app(settings: ApiSettings) -> FastAPI:
 
     @app.get("/health", response_model=Health, responses={503: {"model": Health}})
     def health(request: Request, response: Response) -> Health:
-        """Return 200 if the database answers and the feed data is fresh, else 503."""
+        """Return 200 if the database answers, data is fresh and the schedule fits; else 503."""
         try:
             with request.app.state.pool.connection(timeout=POOL_TIMEOUT_S) as conn:
+                problem = schedule_problem(conn)
                 latest = queries.latest_feed_ts(conn)
         except psycopg.Error as exc:
             result = database_unavailable(exc)
         else:
-            result = check_health(latest, datetime.now(UTC), settings.feed_max_age_s)
+            if problem:
+                result = Health(status="unavailable", reason=problem)
+            else:
+                result = check_health(latest, datetime.now(UTC), settings.feed_max_age_s)
         if result.status != "ok":
             response.status_code = 503
         return result

@@ -79,3 +79,24 @@ def check_health(latest_feed_ts: datetime | None, now: datetime, max_age_s: int)
 def database_unavailable(error: Exception) -> Health:
     """Return the health response for a database that can't be reached or queried."""
     return Health(status="unavailable", reason=f"database unavailable: {type(error).__name__}")
+
+
+def schedule_mismatch(
+    version_id: str | None, found: int, expected: int, fixture_set: str
+) -> str | None:
+    """Return why the active schedule can't serve the replayed fixtures, or None if it can.
+
+    Every trip of the fixture set must be in the active version: the mini GTFS is built from
+    the fixtures, so a missing trip means another version is active (#75).
+    """
+    if version_id is not None and found == expected:
+        return None
+    active = f"active schedule version {version_id}" if version_id else "no active schedule"
+    return (
+        f"{active} has {found} of the {expected} trips of fixture set {fixture_set!r}. "
+        "Fixtures mode needs the mini GTFS active: 'make down && make up' imports it in project "
+        "btp-fixtures. If it is already there but retired, run 'btp-schedule activate <id>' "
+        "(ids: 'btp-schedule status') or reset this project's volumes "
+        "(deploy/compose/README.md#resetting). If the mini GTFS is outdated, re-record the "
+        "fixtures ('make fixtures')"
+    )

@@ -1,6 +1,9 @@
 # Local platform and release stack: one Kafka broker (KRaft) and Postgres 16.
 # Memory limits fit the 2 GB t4g.small release server. See README.md in this folder.
-name: btp
+#
+# No `name:` here: the project name always comes from -p, one per data mode, so each mode
+# has its own volumes (#75). Makefile: btp-fixtures or btp-live; scripts/smoke.sh: btp-smoke;
+# the release server: btp-live. Without -p, compose would name the project after this folder.
 
 services:
   kafka:

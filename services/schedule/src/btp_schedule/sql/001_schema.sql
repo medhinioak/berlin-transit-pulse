@@ -157,3 +157,7 @@ CREATE OR REPLACE VIEW schedule.v_calendar_dates AS
 CREATE OR REPLACE VIEW schedule.v_feed_info AS
     SELECT t.* FROM schedule.feed_info t
     JOIN schedule.versions v USING (version_id) WHERE v.status = 'active';
+-- The active version itself (no row if none), for consumers that report which one it is.
+CREATE OR REPLACE VIEW schedule.v_active_version AS
+    SELECT version_id, feed_start_date, feed_end_date, activated_at
+    FROM schedule.versions WHERE status = 'active';
