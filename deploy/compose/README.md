@@ -144,6 +144,31 @@ processor ~46. With metrics-api (#9, 2026-11-19): ~800 MB in total, kafka ~568, 
 metrics-api ~48. With web (#10, 2026-11-20): web ~9 MB. A new service needs a limit that still fits next to these; check with
 `docker stats --no-stream` after adding anything.
 
+### Measuring memory
+
+`scripts/measure_memory.sh` records every container of one compose project until it's
+stopped, locally or on the release server (#77, #20):
+
+```sh
+scripts/measure_memory.sh /tmp/live.csv            # every 30 s, project btp-live
+scripts/measure_memory.sh /tmp/fx.csv 5 btp-fixtures
+nohup scripts/measure_memory.sh /tmp/live.csv >/tmp/measure.log 2>&1 &   # for hours
+kill -TERM <pid>                                    # or Ctrl-C: writes the summary, exits 0
+uv run python scripts/summarise_memory.py /tmp/live.csv --summary /tmp/live.summary.txt
+```
+
+- `live.csv` gets one row per running container per reading:
+  `timestamp,container,mem_bytes,mem_limit_bytes,cpu_percent` (UTC). A restarted run appends.
+  Each `docker stats` call takes about 2 s, so readings come a little slower than the interval.
+- `live.summary.txt`, written on stop: each container's cgroup `memory.peak` (since the
+  container started) and its `OOMKilled` flag. Containers that have exited are listed as skipped.
+- The summariser prints a markdown table: median, p95, peak and time of peak (UTC and Berlin)
+  per container. It needs Python 3.12 (stdlib only); the release server's `python3` is older,
+  so copy the CSV and summary off the server and summarise them locally.
+- `mem_bytes` is what `docker stats` shows. On cgroup v2 that leaves out inactive page cache;
+  `memory.peak` includes it, so it's the higher, safer figure to set a limit from.
+- Keep the raw CSVs out of the repo; post the table on the issue instead.
+
 ## Resetting
 
 The init SQL runs only when the Postgres volume is empty. To start one mode from scratch (this
