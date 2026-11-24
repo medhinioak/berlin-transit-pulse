@@ -46,14 +46,26 @@ The "now" views use the session setting `btp.as_of`, or `now()` when it isn't se
 In fixtures mode the stop times are those recorded on 2026-11-18, so the API pins `btp.as_of`
 to the header time of the replayed set's last snapshot (rush-hour: 2026-11-18T17:04:51Z). In
 live mode it sets nothing. The value is logged at start (`started`, field `as_of`) and
-returned as `as_of`.
+returned as `as_of`. The clock doesn't matter: fixture data is served the same after the
+2026-12-13 timetable change (integration test).
+
+### Schedule check (fixtures mode)
+
+The replayed trips only show up if the active schedule contains them (the mini GTFS does).
+In fixtures mode the API compares the trip_ids of the fixture set with
+`marts.v_schedule_trips` at start and on every `/health`. If any is missing, it logs an
+error (`schedule doesn't match fixtures`) and `/health` answers 503 with the reason, e.g.
+`active schedule version 8255349c4cd3 has 16 of the 172 trips of fixture set 'rush-hour'.
+Fixtures mode needs the mini GTFS: run 'make down && make up' …`. `/v1/now/by-mode` keeps
+answering (with fewer or no rows). Live mode skips the check.
 
 ## Endpoints
 
 ### `GET /health`
 
-200 when the database answers and `marts.v_feed_status.latest_feed_ts` is less than 5 minutes
-old, else 503 with the reason (`database unavailable: …`, `no feed data in the database`,
+200 when the database answers, `marts.v_feed_status.latest_feed_ts` is less than 5 minutes
+old and, in fixtures mode, the [schedule check](#schedule-check-fixtures-mode) passes, else 503
+with the reason (`database unavailable: …`, the schedule check's message, `no feed data in the database`,
 `feed data is N s old (limit 300 s)`, `feed data is N s in the future` when it is more than 60 s ahead of the API clock).
 
 ```json
@@ -113,4 +125,7 @@ make up && uv run pytest -m integration services/metrics-api
 
 The integration tests call the compose API (fixtures mode): bus and tram rows with plausible
 values, the cache header and `/health`. They also check that `btp_api` can't read `events`
-or `schedule` and can't create anything.
+or `schedule` and can't create anything. They run the schedule check first and fail in
+seconds with its message if the wrong schedule is active. Two more: a wrong active version
+gives that message, not just an empty list (superuser, rolled back), and the app serves fixture
+data with its clock faked to 2026-12-20.

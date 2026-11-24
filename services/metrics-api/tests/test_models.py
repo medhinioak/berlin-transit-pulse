@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from btp_metrics_api.models import ATTRIBUTION, check_health, shape_now_by_mode
+from btp_metrics_api.models import ATTRIBUTION, check_health, schedule_mismatch, shape_now_by_mode
 
 NOW = datetime(2026, 11, 19, 10, 0, tzinfo=UTC)
 COMPUTED = datetime(2026, 11, 19, 9, 59, 58, tzinfo=UTC)
@@ -110,3 +110,25 @@ def test_health_unavailable_without_data() -> None:
     health = check_health(None, NOW, 300)
     assert health.status == "unavailable"
     assert health.reason == "no feed data in the database"
+
+
+def test_schedule_matches_fixtures() -> None:
+    """All fixture trips in the active version: no problem."""
+    assert schedule_mismatch("abc123", 172, 172, "rush-hour") is None
+
+
+def test_schedule_missing_trips_names_version_and_fix() -> None:
+    """Another version active (#75: a republished live GTFS): the message says what to do."""
+    reason = schedule_mismatch("8255349c4cd3", 16, 172, "rush-hour")
+    assert reason is not None
+    assert "active schedule version 8255349c4cd3 has 16 of the 172 trips" in reason
+    assert "'rush-hour'" in reason
+    assert "make down && make up" in reason
+    assert "make fixtures" in reason
+
+
+def test_schedule_without_active_version() -> None:
+    """No active version at all is a problem too, not an empty but healthy answer."""
+    reason = schedule_mismatch(None, 0, 172, "evening")
+    assert reason is not None
+    assert reason.startswith("no active schedule has 0 of the 172 trips")
