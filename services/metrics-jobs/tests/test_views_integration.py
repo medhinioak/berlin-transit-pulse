@@ -10,6 +10,7 @@ import os
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import psycopg
 import pytest
@@ -178,6 +179,90 @@ def test_mode_with_only_cancellations(processor: Connection, trips: dict[str, li
     assert tram["running_trips"] == 0
     assert tram["avg_delay_s"] is None
     assert tram["cancelled_trips_today"] == 1
+
+
+@pytest.fixture
+def swapped_schedule() -> Iterator[str]:
+    """Simulate a timetable change at 00:00 on D; yield the suffix of the new trip_ids.
+
+    The new version is a copy of the active one whose trip_ids end in ':new'. Written as
+    btp_schedule; removed afterwards, and the activation history restored. Only
+    version_activations changes, as activate() would record it; the active-version views
+    stay as they are.
+    """
+    new = "test-swap"
+    with connect("btp_schedule", "BTP_PG_SCHEDULE_PASSWORD", "dev_schedule") as conn:
+
+        def clean() -> None:
+            with conn.transaction():
+                for table in ("routes", "trips", "versions"):
+                    conn.execute(f"DELETE FROM schedule.{table} WHERE version_id = %s", [new])
+                conn.execute(
+                    "DELETE FROM schedule.version_activations WHERE version_id = %s", [new]
+                )
+                conn.execute(
+                    "UPDATE schedule.version_activations SET deactivated_at = NULL "
+                    "WHERE activation_id = (SELECT max(activation_id) "
+                    "FROM schedule.version_activations)"
+                )
+
+        clean()
+        with conn.transaction():
+            old = conn.execute("SELECT version_id FROM schedule.v_active_version").fetchone()
+            assert old is not None
+            conn.execute(
+                "INSERT INTO schedule.versions (version_id, sha256, source_url, status) "
+                "VALUES (%s, 'test', 'test:swap', 'ready')",
+                [new],
+            )
+            # Only the columns the view reads; the rest stay NULL.
+            conn.execute(
+                "INSERT INTO schedule.routes (version_id, route_id, route_type, mode, in_berlin) "
+                "SELECT %s, route_id, route_type, mode, in_berlin FROM schedule.routes "
+                "WHERE version_id = %s",
+                [new, old[0]],
+            )
+            conn.execute(
+                "INSERT INTO schedule.trips (version_id, route_id, service_id, trip_id, in_berlin) "
+                "SELECT %s, route_id, service_id, trip_id || ':new', in_berlin FROM schedule.trips "
+                "WHERE version_id = %s",
+                [new, old[0]],
+            )
+            midnight = datetime(D.year, D.month, D.day, tzinfo=ZoneInfo("Europe/Berlin"))
+            conn.execute(
+                "UPDATE schedule.version_activations SET deactivated_at = %s "
+                "WHERE deactivated_at IS NULL",
+                [midnight],
+            )
+            conn.execute(
+                "INSERT INTO schedule.version_activations "
+                "(version_id, activated_at, effective_from) VALUES (%s, %s, %s)",
+                [new, midnight, midnight],
+            )
+        yield ":new"
+        clean()
+
+
+def test_timetable_change_night(
+    processor: Connection, trips: dict[str, list[str]], swapped_schedule: str
+) -> None:
+    """At 00:30 on the first day of a new timetable, yesterday's trips keep their old version.
+
+    The new version has new trip_ids: today's trips match only under those, while a trip of
+    yesterday still running past midnight matches under its old id.
+    """
+    bus = trips["bus"]
+    yesterday = D - timedelta(days=1)
+    add_trip(processor, bus[0], yesterday, [(at(-30), 60, None), (at(15), 60, None)])
+    add_trip(processor, bus[1] + swapped_schedule, D, [(at(-10), 0, None), (at(10), 0, None)])
+    # An old id on the new day isn't in the new version: no mode, left out.
+    add_trip(processor, bus[2], D, [(at(-10), 120, None), (at(10), 120, None)])
+    bus_row = view_rows()["bus"]
+    # bus[0] (60 s) and bus[1]:new (0 s). Reading only the active version would count bus[0]
+    # and bus[2] instead: 2 trips with a delay, averaging 90 s.
+    assert bus_row["running_trips"] == 2
+    assert bus_row["trips_with_nonzero_delay"] == 1
+    assert bus_row["avg_delay_s"] == 30.0
 
 
 def test_apply_sql_is_idempotent() -> None:

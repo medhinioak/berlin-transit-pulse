@@ -3,7 +3,13 @@ name = "btp-schedule"
 version = "0.1.0"
 description = "Schedule service: imports static GTFS timetable versions."
 requires-python = ">=3.12"
-dependencies = ["btp-common", "psycopg[binary]>=3.3.9", "httpx>=0.28.1", "tzdata>=2025.2"]
+dependencies = [
+    "btp-common",
+    "psycopg[binary]>=3.3.9",
+    "httpx>=0.28.1",
+    "tzdata>=2025.2",
+    "boto3>=1.44.9",
+]
 
 [project.scripts]
 btp-schedule = "btp_schedule.cli:main"

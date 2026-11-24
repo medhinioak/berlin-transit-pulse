@@ -132,5 +132,43 @@ docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=${IMAGE_
   done
 docker image prune -f >/dev/null
 
+# --- 4. Batch jobs: systemd units and timers (ADR-0011) ---
+# After deployed_sha is written: run-job.sh runs that release, and refuses to run while the
+# checkout differs from it (a deploy in progress or one that failed before this point).
+# Installs deploy/release/systemd/btp-* into /etc/systemd/system, enables every timer, and
+# removes units an earlier deploy installed whose files are gone. Only units listed in
+# UNITS_FILE are ever removed: other btp-* units on the host (e.g. measurements) stay.
+UNIT_SRC="$REPO/deploy/release/systemd"
+UNIT_DST=/etc/systemd/system
+UNITS_FILE="$BTP_DIR/installed_units"
+mapfile -t units < <(find "$UNIT_SRC" -maxdepth 1 -type f -name 'btp-*' -printf '%f\n' | sort)
+reload=0
+for unit in "${units[@]}"; do
+  if ! cmp -s "$UNIT_SRC/$unit" "$UNIT_DST/$unit"; then
+    install -m 0644 "$UNIT_SRC/$unit" "$UNIT_DST/$unit"
+    log "installed $unit"
+    reload=1
+  fi
+done
+if [ -f "$UNITS_FILE" ]; then
+  while read -r unit; do
+    [ -n "$unit" ] || continue
+    if [[ ! " ${units[*]} " == *" $unit "* ]] && [ -e "$UNIT_DST/$unit" ]; then
+      systemctl disable --now "$unit" >/dev/null 2>&1 || true
+      rm -f "$UNIT_DST/$unit"
+      log "removed $unit"
+      reload=1
+    fi
+  done <"$UNITS_FILE"
+fi
+printf '%s\n' "${units[@]}" >"$UNITS_FILE"
+[ "$reload" = 0 ] || systemctl daemon-reload
+for unit in "${units[@]}"; do
+  if [[ "$unit" == *.timer ]]; then
+    systemctl enable --now "$unit" >/dev/null 2>&1 || fail "could not enable $unit"
+  fi
+done
+systemctl list-timers 'btp-*' --no-pager
+
 "${COMPOSE[@]}" ps -a
 log "OK"

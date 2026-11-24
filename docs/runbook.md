@@ -107,6 +107,30 @@ dc up -d --no-build --no-deps ingest        # recreate it (after changing /opt/b
 Don't run `dc build` or `dc up` without `--no-build`: the server never builds images. A change
 to the code goes through a pull request and the deploy.
 
+## Scheduled jobs (timers)
+
+Batch jobs are systemd timers on the host
+([ADR-0011](adr/0011-orchestrate-batch-jobs-with-systemd-timers-on-the-host.md)). The unit files
+are in `deploy/release/systemd/`, and each deploy installs or updates them. Each job runs a
+one-shot container of the deployed release through `deploy/release/run-job.sh`.
+
+| Timer | When (Europe/Berlin) | Runs |
+| --- | --- | --- |
+| `btp-schedule-refresh` | daily 03:30, plus up to 15 min | `btp-schedule refresh`: download if changed, import, stage or activate, back up the zip, prune |
+| `btp-schedule-activate` | daily 23:40 | `btp-schedule activate-due`: activate a staged version starting tomorrow |
+
+```bash
+systemctl list-timers 'btp-*'                         # next and last run of each
+journalctl -u btp-schedule-refresh --since today      # output and "run-job: … exit N"
+systemctl start btp-schedule-refresh                  # run now (waits until it finishes)
+systemctl status btp-schedule-refresh                 # result of the last run
+```
+
+Missed runs (the server was off) run at the next boot. A failed run is retried at the next
+scheduled time. While a deploy runs, or after one failed before recording itself, a job logs
+"deployed release is … not running" and exits 1: the checkout and the deployed images differ.
+The next deploy or scheduled run puts it right. Until monitoring exists (M5), check the journal.
+
 ## Database
 
 ```bash
@@ -120,38 +144,70 @@ with `ALTER ROLE … PASSWORD …` in psql, then redeploy.
 
 ## 13 December 2026: the timetable change
 
-VBB's annual timetable starts on Sunday 2026-12-13, with new trip IDs. Until the weekly GTFS
-refresh (#24) is merged and deployed, the new static GTFS has to be imported by hand **that
-morning**:
+VBB's annual timetable starts on Sunday 2026-12-13, with new trip IDs. The timers handle it
+([schedule README](../services/schedule/README.md#staging-activation-and-pruning)):
+
+- once VBB publishes the zip (at most 21 days ahead), the 03:30 refresh imports it as `ready`
+  with `activate_on` 2026-12-13;
+- at 23:40 on the 12th, `activate-due` activates it;
+- trips of the 12th still running after midnight keep their old version.
+
+**VBB may not publish a separate zip.** The zip of 2026-11-20 (`8255349c4cd3`, checked
+2026-11-24) already runs to 2027-12-11. It holds 70,811 trips that run only from 13 December,
+with their new trip IDs. Any version imported from it or a later zip already covers the 13th,
+with no swap at all. Check that the active version has trips on the 13th:
 
 ```bash
-# in a shell on the server (see above). Max age 0: ignore the cached zip, which is the old
-# timetable and would make the import a no-op.
-dc run --rm -e BTP_SCHEDULE_MAX_AGE_HOURS=0 schedule-import
-dc exec postgres psql -U postgres -d btp -c \
-  "select version_id, status, feed_start_date, feed_end_date, activated_at
-     from schedule.versions order by created_at"
+dc exec postgres psql -U postgres -d btp -c "
+  select count(distinct t.trip_id) from schedule.v_trips t
+  join schedule.v_calendar_dates d using (service_id)
+  where d.date = '2026-12-13' and d.exception_type = 1"
 ```
 
-The new version should be `active` with `feed_start_date` 2026-12-13, and the old one `retired`.
+Tens of thousands of trips: nothing to do on the 13th but the API check below. Zero (the active
+version is older): the next 03:30 refresh imports the current zip. Or run the refresh by hand
+(manual fallback below).
 
-Then check from your machine that live data still matches the new schedule:
+**Verify** between 10 and 12 December, and again on the morning of the 13th:
+
+```bash
+dc run --rm --no-deps -T schedule-import btp-schedule status
+journalctl -u btp-schedule-refresh --since -2d
+journalctl -u btp-schedule-activate --since -2d   # on the 13th: "version … is now active"
+```
+
+If VBB publishes a zip starting on the 13th, it should be `ready` with
+`activate_on=2026-12-13` before then. On the 13th it should be `active`, and the previous one
+`retired`. Either way, check from your machine on the 13th that live data still matches:
 
 ```bash
 curl -s "https://$(terraform -chdir=deploy/terraform/release output -raw cloudfront_domain_name)/api/v1/now/by-mode" | jq
 ```
 
 Every mode should still show `running_trips > 0`. If it doesn't, roll back to the previous
-version (see the schedule README, `btp-schedule activate <id>`) and investigate.
+version (`btp-schedule activate <id>`, as below) and investigate.
 
-**A failed import doesn't stop a deploy.** Each deploy reruns `schedule-import`. Once VBB
-publishes the new timetable, its zip starts on the 13th, so it doesn't cover today and fails
-validation (see "Staging early" in [`services/schedule/README.md`](../services/schedule/README.md#known-limitations-for-24-weekly-refresh)).
-In the release, `schedule-import` then keeps the active version and exits 0
-(`deploy/compose/compose.release.yaml`). The deploy goes on, and the workflow run shows a warning
-"schedule-import failed". The same happens when the download fails. Check the reason with
-`dc logs schedule-import`. Only a server with no active version at all (a new instance) fails
-the deploy at this step.
+**Manual fallback**, if nothing is staged by the 12th (VBB late, refreshes failing) or the
+activation didn't run. It can be used at any time on the 12th or 13th:
+
+```bash
+# Max age 0: ignore the cached zip, which may be the old timetable.
+dc run --rm --no-deps -T -e BTP_SCHEDULE_MAX_AGE_HOURS=0 schedule-import btp-schedule refresh
+dc run --rm --no-deps -T schedule-import btp-schedule activate-due   # on the 12th
+dc run --rm --no-deps -T schedule-import btp-schedule status
+```
+
+On the 12th the refresh stages the new zip, and `activate-due` activates it for the 13th. On
+the 13th the refresh activates it immediately, and it still counts from 00:00 on the 13th
+(ADR-0023). Roll back with `dc run --rm --no-deps -T schedule-import btp-schedule activate
+<previous id>`.
+
+**A failed import doesn't stop a deploy.** Each deploy reruns `schedule-import`
+(`import --activate`). A staged version is no longer a failure: it stays `ready`. If the
+download or import does fail, `schedule-import` keeps the active version and exits 0
+(`deploy/compose/compose.release.yaml`). The deploy goes on, and the workflow run shows the
+warning "schedule-import failed". Check the reason with `dc logs schedule-import`. Only a server
+with no active version at all (a new instance) fails the deploy at this step.
 
 ## If the instance is replaced
 

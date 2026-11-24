@@ -1,5 +1,5 @@
 -- Live indicator, not a reliability metric: trips running now and their current delay, per
--- mode, for Berlin trips of the active schedule. On-time rates, coverage thresholds and the
+-- mode, for Berlin trips of the schedule. On-time rates, coverage thresholds and the
 -- other metric definitions wait for ADR-0005 (M3); don't add them here.
 --
 -- Reference time ("now"): the session setting btp.as_of if set, else now() (ADR-0019). The
@@ -18,7 +18,8 @@
 --   those already removed from the feed.
 --
 -- Only service days today and yesterday are read: a trip running now started on one of
--- them. Trips not in the active schedule (e.g. ADDED trips) have no mode and are left out.
+-- them. Trips not in their service day's schedule version (e.g. ADDED trips) have no mode
+-- and are left out.
 --
 -- Plan: start from the few trips still in the feed (removed_at IS NULL; ingest tombstones
 -- finished trips) and read each one's stops through the stop_predictions primary key, rather
@@ -46,11 +47,17 @@ candidates AS (
           OR (ts.schedule_relationship = 'CANCELED' AND ts.service_date = ref.today)
       )
 ),
+-- Each trip is looked up in the schedule version of its own service day (ADR-0023): on the
+-- night of a timetable change, yesterday's trips still running keep their old trip_ids.
 berlin AS MATERIALIZED (
     SELECT c.trip_id, c.service_date, c.cancelled, r.mode
     FROM candidates c
-    JOIN schedule.v_trips t ON t.trip_id = c.trip_id
-    JOIN schedule.v_routes r ON r.route_id = t.route_id
+    JOIN schedule.v_trips_by_service_date t
+      ON t.trip_id = c.trip_id
+     AND c.service_date BETWEEN t.first_service_date AND t.last_service_date
+    JOIN schedule.v_routes_by_service_date r
+      ON r.version_id = t.version_id AND r.route_id = t.route_id
+     AND c.service_date BETWEEN r.first_service_date AND r.last_service_date
     WHERE t.in_berlin
 ),
 running AS (

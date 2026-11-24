@@ -1,0 +1,14 @@
+# Daily static GTFS refresh: download if changed, import, stage or activate, back up, prune.
+# Started by btp-schedule-refresh.timer; installed by deploy/release/deploy.sh (ADR-0011).
+[Unit]
+Description=btp: refresh the static GTFS schedule
+Documentation=https://github.com/medhinioak/berlin-transit-pulse/blob/main/docs/runbook.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/btp/repo/deploy/release/run-job.sh schedule-refresh schedule-import btp-schedule refresh
+# A real import takes a few minutes, a prune of one version more; this only catches a hang.
+TimeoutStartSec=60min

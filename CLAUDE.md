@@ -22,7 +22,8 @@ Keep this list true to the Makefile (`make help` lists every target).
 - Run ingest on its own: BTP_FEED_MODE=fixtures uv run btp-ingest (offline replay; live mode needs
   BTP_FEED_CONTACT and calls the real feed, see Rules). Config: services/ingest/README.md
 - Schedule versions: uv run btp-schedule status | import [--file PATH] [--activate] | activate ID
-  (services/schedule/README.md)
+  | refresh | activate-due (services/schedule/README.md). On the server they run from systemd
+  timers in deploy/release/systemd/ (ADR-0011): systemctl list-timers 'btp-*'
 - Marts views: uv run btp-metrics-jobs apply-sql (services/metrics-jobs/README.md). API: make up
   serves http://localhost:8000 (/docs, /health, /v1/now/by-mode; services/metrics-api/README.md).
   Web page: make up serves http://localhost:8080 (web/, nginx; deploy/compose/README.md)
@@ -38,7 +39,7 @@ Keep this list true to the Makefile (`make help` lists every target).
   BTP_FEED_CONTACT; see fixtures/README.md and Rules)
 - Deploy: automatic after CI passes on main (.github/workflows/release.yml: arm64 images to GHCR,
   SSM deploy, page to S3, smoke test). Redeploy or roll back: gh workflow run release.yml
-  [-f sha=<sha on main>]. Server shell, logs, 13 Dec step: docs/runbook.md
+  [-f sha=<sha on main>]. Server shell, logs, timers, 13 Dec check: docs/runbook.md
 - Terraform: make tf-validate STACK=bootstrap (no credentials; init -backend=false, fmt, validate).
   make tf-plan STACK=… is for the maintainer. Never apply from here (deploy/terraform/README.md)
 - GitHub: use the gh CLI for issues, PRs and CI
@@ -135,8 +136,10 @@ Keep this list true to the Makefile (`make help` lists every target).
 - The feed lists most of the day's S-Bahn trips in advance. Shares computed over all trips in
   a snapshot are meaningless; count only trips that are running or have run.
 - Annual timetable change on 2026-12-13: the static GTFS version changes and trip IDs
-  with it.
-- Consumers read the schedule only through the schedule.v_* views (active version, ADR-0009);
+  with it. The zip is staged up to 21 days ahead and activated at 23:40 on the eve (ADR-0023);
+  trips of the previous service day keep the old version. Join realtime data to the schedule
+  by service day (schedule.v_*_by_service_date), not through the active-version views.
+- Consumers read the schedule only through the schedule.v_* views (ADR-0009, ADR-0023);
   the tables hold every version and trip_ids change between them. A Berlin trip has any stop
   with a de:11000: stop_id (ADR-0017).
 - Realtime stop_ids are sometimes bare numbers that aren't in the static GTFS (~1.3% of

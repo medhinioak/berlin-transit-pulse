@@ -1,7 +1,9 @@
 """Validation rules a version must pass before it can be activated."""
 
 from datetime import date
+from pathlib import Path
 
+from btp_schedule.gtfs import GtfsSource, feed_start_date
 from btp_schedule.importer import validation_errors
 
 GOOD_COUNTS = {"routes": 1, "trips": 1, "stops": 1, "stop_times": 1}
@@ -26,12 +28,36 @@ def test_unknown_trips() -> None:
     assert errors == ["stop_times reference unknown trips, e.g. t1, t2"]
 
 
-def test_date_range_must_cover_today() -> None:
-    """A feed that ended yesterday or starts tomorrow is not usable today."""
-    assert validation_errors(GOOD_COUNTS, [], RANGE, date(2026, 11, 17)) == [
-        "feed dates 2026-11-18..2027-12-11 don't cover 2026-11-17"
+def test_date_range_must_not_have_ended() -> None:
+    """A feed that ended yesterday is not usable; one without dates neither."""
+    assert validation_errors(GOOD_COUNTS, [], RANGE, date(2027, 12, 12)) == [
+        "feed dates 2026-11-18..2027-12-11 don't cover 2027-12-12"
     ]
-    assert validation_errors(GOOD_COUNTS, [], RANGE, date(2027, 12, 12))
     assert validation_errors(GOOD_COUNTS, [], (None, None), date(2026, 12, 1)) == [
         "no feed date range (feed_info, calendar and calendar_dates are empty)"
     ]
+
+
+def test_feed_starting_within_21_days_is_staged() -> None:
+    """The 13 Dec timetable is valid from 22 Nov; one day earlier it is too far ahead."""
+    new = (date(2026, 12, 13), date(2027, 12, 11))
+    assert validation_errors(GOOD_COUNTS, [], new, date(2026, 12, 12)) == []
+    assert validation_errors(GOOD_COUNTS, [], new, date(2026, 11, 22)) == []
+    assert validation_errors(GOOD_COUNTS, [], new, date(2026, 11, 21)) == [
+        "feed starts on 2026-12-13, more than 21 days after 2026-11-21; "
+        "it can be staged from 2026-11-22"
+    ]
+
+
+def test_feed_start_date_without_loading(tmp_path: Path) -> None:
+    """The start comes from feed_info if set, else calendar and calendar_dates."""
+    (tmp_path / "calendar.txt").write_text(
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
+        "1,1,1,1,1,1,1,1,20261213,20271211\n"
+    )
+    (tmp_path / "calendar_dates.txt").write_text("service_id,date,exception_type\n1,20261220,1\n")
+    source = GtfsSource(tmp_path)
+    assert feed_start_date(source, source.names()) == date(2026, 12, 13)
+    (tmp_path / "feed_info.txt").write_text("feed_publisher_name,feed_start_date\nVBB,20261201\n")
+    assert feed_start_date(source, source.names()) == date(2026, 12, 1)
+    assert feed_start_date(source, set()) is None

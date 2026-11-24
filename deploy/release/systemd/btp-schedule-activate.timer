@@ -1,0 +1,11 @@
+# Daily at 23:40 Europe/Berlin; a run missed while the server was off runs at the next boot
+# (Persistent). Installed by deploy/release/deploy.sh (ADR-0011).
+[Unit]
+Description=btp: daily activation of a due schedule version
+
+[Timer]
+OnCalendar=*-*-* 23:40:00 Europe/Berlin
+Persistent=true
+
+[Install]
+WantedBy=timers.target

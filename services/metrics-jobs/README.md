@@ -41,7 +41,7 @@ definitions of ADR-0005 (M3). Don't present it as one.
 
 | Column | Meaning |
 | --- | --- |
-| `mode` | from the active schedule (`schedule.v_routes.mode`, ADR-0017) |
+| `mode` | from the schedule version of the trip's service day (`schedule.v_routes_by_service_date.mode`, ADR-0017, ADR-0023) |
 | `running_trips` | Berlin trips running now (definition below) |
 | `trips_with_nonzero_delay` | running trips whose current delay is known and not 0 |
 | `avg_delay_s`, `p50_delay_s`, `p95_delay_s` | mean, median and 95th percentile (`percentile_cont`) of the current delay, seconds, rounded to 0.1 s; `NULL` if no running trip has a delay |
@@ -57,7 +57,7 @@ definitions of ADR-0005 (M3). Don't present it as one.
   228 of 184k stop rows). Counting them would give a NULL current delay when the next stop is
   skipped, and could stretch a trip's running window.
 - **Running trip**: in `events.trip_state`, not removed, not `CANCELED`, in Berlin
-  (`schedule.v_trips.in_berlin`), and the earliest predicted time of its stops <= now <=
+  (`schedule.v_trips_by_service_date.in_berlin`), and the earliest predicted time of its stops <= now <=
   the latest one. Predicted time is `departure_time`, else `arrival_time`. Trips that haven't
   started or have finished are left out, so their zero delays don't count (CLAUDE.md, Gotchas).
 - **Current delay**: at the first stop (by `stop_sequence`) whose predicted time is at or
@@ -65,7 +65,13 @@ definitions of ADR-0005 (M3). Don't present it as one.
   counts in `running_trips` but not in the delay columns.
 - Only the service days today and yesterday are read: a trip running now started on one of
   them (yesterday covers trips past midnight).
-- Trips missing from the active schedule (e.g. `ADDED` trips) have no mode and are left out.
+- **Schedule version**: each trip is looked up in the version of its own service day
+  (`schedule.v_*_by_service_date`,
+  [ADR-0023](../../docs/adr/0023-stage-record-and-prune-schedule-versions.md)), not in the
+  active one. On the night of a timetable change (next: 2026-12-13), trips of the previous
+  day still running after midnight keep their old trip IDs and their mode.
+- Trips missing from their service day's version (e.g. `ADDED` trips) have no mode and are
+  left out.
 - A mode appears when it has running trips or cancellations today. No running trips (late
   at night, or a feed outage) gives no rows, not zeros.
 
@@ -100,10 +106,6 @@ a Postgres restart pays for an empty cache; the 500 ms target (#9) holds once wa
 
 ## Known limitations
 
-- **Timetable change night** (2026-12-13): the view finds a trip's mode and Berlin flag only in
-  the active schedule version. Trips of the previous service day still running after
-  midnight keep their old trip_ids, so after the new version is activated they drop out
-  until they finish. Handling version swaps is for M3, with the weekly refresh (#24).
 - **No retention yet** (M3): `max(feed_ts)` in `v_feed_status` and the `service_date` filter
   on `trip_state` are sequential scans. They take ~20 ms at ~80k rows (one day) and grow with
   every day kept. Retention or an index on `trip_state` (processor schema) comes before it

@@ -11,18 +11,20 @@ when to write one: [`../process.md`](../process.md#writing-an-adr).
 | --- | --- | --- |
 | [0008](0008-keep-a-raw-snapshot-every-5-minutes-for-14-days.md) | Keep a raw snapshot every 5 minutes for 14 days, not every poll | Accepted |
 | [0009](0009-version-static-gtfs-and-swap-atomically.md) | Version the static GTFS and swap versions atomically | Accepted |
+| [0011](0011-orchestrate-batch-jobs-with-systemd-timers-on-the-host.md) | Orchestrate batch jobs with systemd timers on the host | Accepted |
 | [0012](0012-deploy-with-terraform-github-actions-and-ssm-without-ssh.md) | Deploy with Terraform, GitHub Actions and SSM, without SSH | Accepted |
 | [0017](0017-define-berlin-and-mode-from-stop-ids-and-route-types.md) | Define "in Berlin" by DHID state code and mode by route type | Accepted |
 | [0018](0018-use-eu-north-1-and-an-iam-user-with-aws-login.md) | Use eu-north-1 and an IAM user with `aws login` on the Free plan | Accepted |
 | [0019](0019-pin-the-reference-time-of-live-views-with-a-session-setting.md) | Pin the reference time of live views with a session setting | Accepted |
 | [0020](0020-run-the-release-on-one-t4g-small-with-no-ssh.md) | Run the release on one t4g.small with no SSH | Accepted |
 | [0021](0021-serve-the-site-through-cloudfront-with-an-s3-origin-and-a-cloudfront-only-ec2-origin.md) | Serve the site through CloudFront with an S3 origin and a CloudFront-only EC2 origin | Accepted |
+| [0023](0023-stage-record-and-prune-schedule-versions.md) | Stage, record and prune schedule versions (extends 0009) | Accepted |
 
 ## Planned
 
-Sixteen ADRs were planned up front (numbers 1–16; 8, 9 and 12 are now written). Until each one is
+Sixteen ADRs were planned up front (numbers 1–16; 8, 9, 11 and 12 are now written). Until each one is
 written, the decision is already made and its rationale is in the document listed here. ADRs 1–5
-are written in M3 (#30) and 6–13 by M5 (#44); 12 came early, with the deploy in M2 (#18), and 8 with the raw snapshots in M2 (#19). ADRs 14–16 wait until the proof of concept is built.
+are written in M3 (#30) and 6–13 by M5 (#44); 12 came early, with the deploy in M2 (#18), 8 with the raw snapshots in M2 (#19), and 11 with the schedule refresh in M3 (#24). ADRs 14–16 wait until the proof of concept is built.
 
 | ADR | Decision | Rationale today | Written |
 | --- | --- | --- | --- |
@@ -34,7 +36,6 @@ are written in M3 (#30) and 6–13 by M5 (#44); 12 came early, with the deploy i
 | 0006 | Self-host Postgres on the server (RDS, TimescaleDB and DynamoDB rejected) | [Technology choices](../architecture.md#technology-choices), [Cost](../cost.md#credits-and-the-free-plan) | M5 |
 | 0007 | Keep history as Parquet on S3, queried with DuckDB (Iceberg, Athena and Redshift rejected) | [Technology choices](../architecture.md#technology-choices) | M5 |
 | 0010 | Show feed gaps instead of filling them: coverage thresholds | [Risks](../risks.md#data), [Data quality](../architecture.md#data-quality) | M5 |
-| 0011 | Orchestrate batch jobs with systemd timers (Airflow and Dagster rejected) | [Technology choices](../architecture.md#technology-choices) | M5 |
 | 0013 | Cost ceiling and the shutdown and archive plan | [Cost](../cost.md#shutdown-and-archive-plan) | M5 |
 | 0014 | Service boundaries: one schema and role per service in a shared Postgres | [Design rules](../architecture.md#design-rules), [Data stores](../architecture.md#postgres) | After the proof of concept |
 | 0015 | Two deployment targets from the same images: compose for the release, ECS for the proof of concept | [Deployment targets](../architecture.md#deployment-targets) | After the proof of concept |
