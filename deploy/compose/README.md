@@ -161,12 +161,16 @@ uv run python scripts/summarise_memory.py /tmp/live.csv --summary /tmp/live.summ
   `timestamp,container,mem_bytes,mem_limit_bytes,cpu_percent` (UTC). A restarted run appends.
   Each `docker stats` call takes about 2 s, so readings come a little slower than the interval.
 - `live.summary.txt`, written on stop: each container's cgroup `memory.peak` (since the
-  container started) and its `OOMKilled` flag. Containers that have exited are listed as skipped.
+  container started), how often it hit its limit (`max` in `memory.events`) and its `OOMKilled`
+  flag. Containers that have exited are listed as skipped.
 - The summariser prints a markdown table: median, p95, peak and time of peak (UTC and Berlin)
   per container. It needs Python 3.12 (stdlib only); the release server's `python3` is older,
   so copy the CSV and summary off the server and summarise them locally.
 - `mem_bytes` is what `docker stats` shows. On cgroup v2 that leaves out inactive page cache;
-  `memory.peak` includes it, so it's the higher, safer figure to set a limit from.
+  `memory.peak` includes it. Page cache grows into whatever the limit leaves free, so Postgres
+  shows a `memory.peak` close to its limit with zero limit hits (#77: 501 of 512 MB, of which
+  ~310 MB inactive cache). Size limits from the `docker stats` peak and check limit hits and
+  `OOMKilled`; a container with limit hits above zero was under pressure.
 - Keep the raw CSVs out of the repo; post the table on the issue instead.
 
 ## Resetting

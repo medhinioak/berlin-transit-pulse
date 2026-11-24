@@ -53,16 +53,18 @@ def test_interleaved_containers_and_a_restarted_run(tmp_path: Path) -> None:
 
 
 def test_summary_file_is_merged_into_the_table(tmp_path: Path) -> None:
-    """memory.peak, OOMKilled and skip notes from the summary file show up per container."""
+    """memory.peak, limit hits, OOMKilled and skip notes show up per container."""
     summary = tmp_path / "run.summary.txt"
     summary.write_text(
         "# 2026-11-24T19:30:00Z project=btp-live\n"
-        "# container memory_peak_bytes oom_killed note\n"
-        f"btp-live-kafka-1 {600 * MIB} false\n"
-        "btp-live-kafka-init-1 - false skipped: exited\n"
+        "# container memory_peak_bytes limit_hits oom_killed note\n"
+        f"btp-live-kafka-1 {600 * MIB} 3 false\n"
+        "btp-live-kafka-init-1 - - false skipped: exited\n"
     )
     finals = read_summary(summary)
     assert finals["btp-live-kafka-1"].memory_peak_bytes == 600 * MIB
+    assert finals["btp-live-kafka-1"].limit_hits == 3
+    assert finals["btp-live-kafka-init-1"].limit_hits is None
     assert finals["btp-live-kafka-init-1"].note == "skipped: exited"
 
     stats = {
@@ -71,7 +73,7 @@ def test_summary_file_is_merged_into_the_table(tmp_path: Path) -> None:
     }
     table = render_markdown(stats, finals).splitlines()
     assert table[2].startswith("| `btp-live-kafka-1` | 1 | 256.0 | 500.0 | 500.0 | 500.0 |")
-    assert table[2].endswith("| 600.0 | false |")
-    assert table[3].endswith("| – | not in summary |")
+    assert table[2].endswith("| 600.0 | 3 | false |")
+    assert table[3].endswith("| – | – | not in summary |")
     # 16:00 UTC is 17:00 in Berlin in November (CET).
     assert "| 2026-11-24 16:00 | 17:00 |" in table[2]

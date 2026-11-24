@@ -3,8 +3,8 @@
     uv run python scripts/summarise_memory.py run.csv [--summary run.summary.txt]
 
 Per container: samples, limit, median, p95 and peak of the memory readings, the time of the
-first peak (UTC and Berlin) and the mean CPU. With --summary, also the cgroup memory.peak and
-the OOMKilled flag recorded when the measurement stopped.
+first peak (UTC and Berlin) and the mean CPU. With --summary, also the cgroup memory.peak, how
+often the container hit its limit, and the OOMKilled flag recorded when the measurement stopped.
 """
 
 import argparse
@@ -50,6 +50,7 @@ class Final:
     """What the summary file says about one container when the measurement stopped."""
 
     memory_peak_bytes: int | None
+    limit_hits: int | None
     oom_killed: str
     note: str
 
@@ -90,14 +91,15 @@ def summarise(samples: list[Sample]) -> Stats:
 
 
 def read_summary(path: Path) -> dict[str, Final]:
-    """Parse the summary file: `name peak_bytes|- oom_killed [note…]`, # lines are comments."""
+    """Parse the summary file: `name peak|- hits|- oom_killed [note…]`; # lines are comments."""
     finals: dict[str, Final] = {}
     for line in path.read_text().splitlines():
         if not line.strip() or line.startswith("#"):
             continue
-        name, peak, oom, *note = line.split()
+        name, peak, hits, oom, *note = line.split()
         finals[name] = Final(
             memory_peak_bytes=None if peak == "-" else int(peak),
+            limit_hits=None if hits == "-" else int(hits),
             oom_killed=oom,
             note=" ".join(note),
         )
@@ -114,7 +116,7 @@ def render_markdown(stats: dict[str, Stats], finals: dict[str, Final] | None = N
     head = ["Container", "Samples", "Limit MiB", "Median MiB", "p95 MiB", "Peak MiB"]
     head += ["Peak at (UTC)", "Peak at (Berlin)", "Mean CPU %"]
     if finals is not None:
-        head += ["memory.peak MiB", "OOMKilled"]
+        head += ["memory.peak MiB", "Limit hits", "OOMKilled"]
     lines = ["| " + " | ".join(head) + " |", "|" + " --- |" * len(head)]
     for name, s in sorted(stats.items(), key=lambda kv: -kv[1].peak_bytes):
         cells = [
@@ -131,10 +133,11 @@ def render_markdown(stats: dict[str, Stats], finals: dict[str, Final] | None = N
         if finals is not None:
             final = finals.get(name)
             if final is None:
-                cells += ["–", "not in summary"]
+                cells += ["–", "–", "not in summary"]
             else:
                 peak = _mib(final.memory_peak_bytes) + (f" ({final.note})" if final.note else "")
-                cells += [peak, final.oom_killed]
+                hits = "–" if final.limit_hits is None else str(final.limit_hits)
+                cells += [peak, hits, final.oom_killed]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
 

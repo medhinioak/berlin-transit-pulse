@@ -10,10 +10,12 @@
 #
 # The header is written only when the file is new, so a restarted run appends. On Ctrl-C or
 # SIGTERM it writes OUTPUT_CSV minus .csv plus .summary.txt: each container's cgroup
-# memory.peak and OOMKilled flag. Summarise with scripts/summarise_memory.py.
+# memory.peak, how often it hit its limit (memory.events max) and its OOMKilled flag.
+# Summarise with scripts/summarise_memory.py.
 #
 # mem_bytes is what `docker stats` reports: on cgroup v2 that is memory.current minus
-# inactive page cache. memory.peak counts the page cache too, so it can be higher.
+# inactive page cache. memory.peak counts the page cache too, which grows into a free limit
+# (Postgres): a peak near the limit with zero limit hits is cache, not pressure.
 set -euo pipefail
 
 usage() {
@@ -71,22 +73,24 @@ sample() {
       }'
 }
 
-# Per container: memory.peak from its cgroup (needs `cat` in the image and a running
-# container) and the OOMKilled flag.
+# Per container: memory.peak and the `max` count of memory.events from its cgroup (needs
+# `cat` in the image and a running container), and the OOMKilled flag.
 write_summary() {
-  local id name state oom peak
+  local id name state oom peak hits
   {
     echo "# $(date -u +%Y-%m-%dT%H:%M:%SZ) project=$project"
-    echo "# container memory_peak_bytes oom_killed note"
+    echo "# container memory_peak_bytes limit_hits oom_killed note"
     for id in $(containers all); do
       read -r name state oom < <(docker inspect -f '{{.Name}} {{.State.Status}} {{.State.OOMKilled}}' "$id")
       name=${name#/}
       if [ "$state" != running ]; then
-        echo "$name - $oom skipped: $state"
+        echo "$name - - $oom skipped: $state"
       elif peak=$(docker exec "$id" cat /sys/fs/cgroup/memory.peak 2>/dev/null); then
-        echo "$name $peak $oom"
+        hits=$(docker exec "$id" cat /sys/fs/cgroup/memory.events 2>/dev/null |
+          awk '$1 == "max" { print $2 }')
+        echo "$name $peak ${hits:--} $oom"
       else
-        echo "$name - $oom skipped: cannot read memory.peak (no cat, or kernel < 5.19)"
+        echo "$name - - $oom skipped: cannot read memory.peak (no cat, or kernel < 5.19)"
       fi
     done
   } >"$summary"
